@@ -5,6 +5,13 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — App icon
+- Generated a native macOS app icon (blue-gradient squircle with a descending
+  "ranked bars" priorities motif) via `tools/make_icon.swift` + CoreGraphics, with
+  all required sizes (16–1024) in `Assets.xcassets/AppIcon.appiconset`.
+- Wired `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon`; verified it compiles into
+  `Assets.car` with `CFBundleIconName` set. Regenerate with `make icon`.
+
 ### Added — Slice 7: snooze scheduling + state persistence
 - **Auto-unsnooze** — snoozed tasks now return to the open state automatically when
   their snooze date passes (run at launch, like a "scheduled for later" wake-up).

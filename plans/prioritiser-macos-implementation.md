@@ -89,8 +89,10 @@ Tests/        PrioritiserTests (Swift Testing): scorer, parser, formatting, filt
 - Folder drag-reorder (sibling reorder, persisted).
 - Persisted sidebar selection / expanded folders / inspected task across launches.
 
-## Beyond the plan (still not built)
-- App icon + signed/notarized distribution (the `make deploy` archive is unsigned).
+## Beyond the plan
+- ✅ App icon — generated via `tools/make_icon.swift`; `make icon` regenerates.
+- Signed/notarized distribution (the `make deploy` archive is still unsigned) —
+  the only remaining item for external distribution.
 
 ## Verification per slice
 - `make build` compiles clean.

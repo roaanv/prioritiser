@@ -65,6 +65,15 @@ deploy: $(PROJECT) ## Build a Release archive (signing/notarization done separat
 	@echo "Archive at $(DERIVED)/Prioritiser.xcarchive"
 	@echo "To distribute: sign + notarize the exported .app (not yet automated)."
 
+.PHONY: icon
+icon: ## Regenerate the app icon asset set from tools/make_icon.swift
+	@ICONSET="Sources/Resources/Assets.xcassets/AppIcon.appiconset"; \
+	swift tools/make_icon.swift "$$ICONSET/icon_1024.png"; \
+	for sz in 16 32 64 128 256 512; do \
+		sips -z $$sz $$sz "$$ICONSET/icon_1024.png" --out "$$ICONSET/icon_$${sz}.png" >/dev/null; \
+	done; \
+	echo "Icon regenerated in $$ICONSET"
+
 .PHONY: clean
 clean: ## Remove build artifacts
 	rm -rf $(DERIVED)

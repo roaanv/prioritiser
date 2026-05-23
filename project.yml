@@ -32,7 +32,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: io.0112.Prioritiser
         PRODUCT_NAME: Prioritiser
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         COMBINE_HIDPI_IMAGES: YES
         ENABLE_PREVIEWS: YES
     info:

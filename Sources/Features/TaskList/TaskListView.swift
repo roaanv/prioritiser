@@ -1,17 +1,18 @@
 // TaskListView.swift
 // The center pane: a context-aware heading, a quick-add bar, and the task list.
-// On "Top Priorities" the list splits into a "Top 5 Now" band of ranked cards and
-// a "Next Up" remainder; every other view renders a flat list. Empty states match
-// the prototype's per-view copy.
-//
-// Note: the quick-add here parses on commit (Enter). The live preview-chip
-// variant and the ⌘N Spotlight capture arrive in slice 2.
+// The List/Schedule tabs switch layout; the Sort and Filter menus reshape the
+// flat list; search (from the sidebar) narrows it. On "Top Priorities" the List
+// layout splits into a "Top 5 Now" band of ranked cards and a "Next Up" remainder.
+// In All Tasks with manual sort and no filters, rows can be dragged to reorder.
 
 import SwiftUI
 
 struct TaskListView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("priorityViz") private var vizMode: PriorityVizMode = .cards
+    @State private var layout: TaskViewMode = .list
+    @State private var sortKey: TaskSort = .manual
+    @State private var stateFilter: StateFilter = .all
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,11 +20,32 @@ struct TaskListView: View {
             QuickAddBar { model.createTask(from: $0) }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 14)
-            Divider().opacity(0)
             taskScroll
             footer
         }
         .background(Color(nsColor: .textBackgroundColor))
+    }
+
+    // MARK: - Display pipeline
+
+    /// State-filtered, sorted tasks for the flat / schedule layouts.
+    private var displayTasks: [TaskItem] {
+        sortKey.sorted(stateFilter.apply(model.visibleTasks), score: model.score)
+    }
+
+    /// Top view keeps its score ordering; only the state filter applies.
+    private var topTasks: [TaskItem] { stateFilter.apply(model.visibleTasks) }
+
+    private var isTopView: Bool {
+        if case .view(.top) = model.selection { return true }
+        return false
+    }
+
+    /// Manual reordering is only unambiguous in All Tasks, manual sort, list layout,
+    /// with no active filter or search.
+    private var reorderable: Bool {
+        layout == .list && sortKey == .manual && stateFilter == .all
+            && !model.isSearching && model.selection == .view(.all)
     }
 
     // MARK: - Header
@@ -32,11 +54,11 @@ struct TaskListView: View {
         HStack(alignment: .bottom, spacing: 16) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(heading.title)
-                    .font(.system(size: 22, weight: .semibold))
+                    .appFont(22, weight: .semibold, relativeTo: .title)
                     .foregroundStyle(.primary)
                 if let sub = heading.subtitle {
                     Text(sub)
-                        .font(.system(size: 12.5))
+                        .appFont(12.5)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -50,29 +72,51 @@ struct TaskListView: View {
 
     private var headerTools: some View {
         HStack(spacing: 4) {
-            tab("List", systemImage: "list.bullet", active: true)
-            tab("Schedule", systemImage: "calendar", active: false)
+            ForEach(TaskViewMode.allCases) { mode in
+                Button { layout = mode } label: {
+                    Label(mode.label, systemImage: mode.systemImage)
+                        .font(.system(size: 12))
+                        .foregroundStyle(layout == mode ? .primary : .secondary)
+                        .padding(.horizontal, 9).padding(.vertical, 4)
+                        .background(layout == mode ? AnyShapeStyle(Color.primary.opacity(0.06)) : AnyShapeStyle(.clear),
+                                    in: RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(layout == mode ? [.isButton, .isSelected] : .isButton)
+            }
             Divider().frame(height: 16).padding(.horizontal, 4)
-            toolButton("arrow.up.arrow.down", help: "Sort")
-            toolButton("line.3.horizontal.decrease", help: "Filter")
+            sortMenu
+            filterMenu
         }
     }
 
-    private func tab(_ title: String, systemImage: String, active: Bool) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.system(size: 12))
-            .foregroundStyle(active ? .primary : .secondary)
-            .padding(.horizontal, 9).padding(.vertical, 4)
-            .background(active ? AnyShapeStyle(Color.primary.opacity(0.06)) : AnyShapeStyle(.clear),
-                        in: RoundedRectangle(cornerRadius: 6))
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort by", selection: $sortKey) {
+                ForEach(TaskSort.allCases) { Text($0.label).tag($0) }
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+                .font(.system(size: 13)).foregroundStyle(.secondary).frame(width: 24, height: 24)
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help("Sort")
+        .accessibilityLabel("Sort")
     }
 
-    private func toolButton(_ systemImage: String, help: String) -> some View {
-        Image(systemName: systemImage)
-            .font(.system(size: 13))
-            .foregroundStyle(.secondary)
-            .frame(width: 24, height: 24)
-            .help(help)
+    private var filterMenu: some View {
+        Menu {
+            Picker("Show", selection: $stateFilter) {
+                ForEach(StateFilter.allCases) { Text($0.label).tag($0) }
+            }
+        } label: {
+            Image(systemName: stateFilter == .all ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
+                .font(.system(size: 13)).foregroundStyle(stateFilter == .all ? .secondary : Color.accentColor)
+                .frame(width: 24, height: 24)
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help("Filter")
+        .accessibilityLabel("Filter")
     }
 
     // MARK: - List
@@ -80,7 +124,9 @@ struct TaskListView: View {
     private var taskScroll: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                if case .view(.top) = model.selection {
+                if layout == .schedule {
+                    scheduleContent
+                } else if isTopView {
                     topContent
                 } else {
                     flatContent
@@ -93,7 +139,7 @@ struct TaskListView: View {
 
     @ViewBuilder
     private var topContent: some View {
-        let tasks = model.visibleTasks
+        let tasks = topTasks
         let top = Array(tasks.prefix(5))
         let rest = Array(tasks.dropFirst(5))
 
@@ -104,37 +150,68 @@ struct TaskListView: View {
                 TaskRowView(task: task, rank: vizMode == .cards ? index + 1 : nil, vizMode: vizMode)
             }
         }
-
         if !rest.isEmpty {
-            band(label: "Next up", trailing: "\(rest.count) more")
-                .padding(.top, 18)
-            // "Next up" is always plain (.cards + no rank), matching the prototype.
-            flatRows(rest, vizMode: .cards)
+            band(label: "Next up", trailing: "\(rest.count) more").padding(.top, 18)
+            flatRows(rest, vizMode: .cards, reorderable: false)
         }
     }
 
     @ViewBuilder
     private var flatContent: some View {
-        let tasks = model.visibleTasks
+        let tasks = displayTasks
         if tasks.isEmpty {
-            Text(emptyMessage)
-                .font(.system(size: 13))
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 60)
+            emptyView
         } else {
-            flatRows(tasks, vizMode: vizMode)
+            flatRows(tasks, vizMode: vizMode, reorderable: reorderable)
         }
     }
 
-    private func flatRows(_ tasks: [TaskItem], vizMode: PriorityVizMode) -> some View {
+    @ViewBuilder
+    private var scheduleContent: some View {
+        let tasks = displayTasks
+        if tasks.isEmpty {
+            emptyView
+        } else {
+            ForEach(DueBucket.allCases) { bucket in
+                let group = tasks.filter { DueBucket.bucket(for: $0.due, clock: model.clock) == bucket }
+                if !group.isEmpty {
+                    band(label: bucket.title, trailing: "\(group.count)")
+                    flatRows(group, vizMode: vizMode, reorderable: false)
+                }
+            }
+        }
+    }
+
+    private var emptyView: some View {
+        Text(model.isSearching ? "No matching tasks." : emptyMessage)
+            .font(.system(size: 13))
+            .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 60)
+    }
+
+    private func flatRows(_ tasks: [TaskItem], vizMode: PriorityVizMode, reorderable: Bool) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
                 if index > 0 {
                     Divider().opacity(0.4).padding(.horizontal, 14)
                 }
-                TaskRowView(task: task, vizMode: vizMode)
+                row(task, vizMode: vizMode, reorderable: reorderable)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ task: TaskItem, vizMode: PriorityVizMode, reorderable: Bool) -> some View {
+        if reorderable {
+            TaskRowView(task: task, vizMode: vizMode)
+                .draggable(task.id)
+                .dropDestination(for: String.self) { items, _ in
+                    if let dragged = items.first { model.moveTask(dragged, before: task.id) }
+                    return true
+                }
+        } else {
+            TaskRowView(task: task, vizMode: vizMode)
         }
     }
 
@@ -156,7 +233,7 @@ struct TaskListView: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
-            let count = model.visibleTasks.count
+            let count = layout == .schedule || !isTopView ? displayTasks.count : topTasks.count
             Text("\(count) \(count == 1 ? "task" : "tasks")")
             Text("·")
             Spacer()
@@ -173,6 +250,9 @@ struct TaskListView: View {
     // MARK: - Heading & empty copy
 
     private var heading: (title: String, subtitle: String?) {
+        if model.isSearching {
+            return ("Search", "Results for “\(model.searchQuery.trimmingCharacters(in: .whitespaces))”")
+        }
         switch model.selection {
         case .view(let view):
             return (view.title, view.subtitle)

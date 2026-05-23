@@ -11,9 +11,8 @@ options:
 
 settings:
   base:
-    # Pin to Swift 5 language mode for now; tighten to Swift 6 strict
-    # concurrency in a later hardening slice (see plans/).
-    SWIFT_VERSION: "5.0"
+    # Swift 6 language mode: complete data-race safety / strict concurrency.
+    SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     # Local development: ad-hoc sign, no provisioning required.

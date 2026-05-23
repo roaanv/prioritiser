@@ -36,7 +36,7 @@ struct QuickAddBar: View {
 
             TextField("Add a task — try #work due:tomorrow t:1h i:h p:h", text: $text)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13))
+                .appFont(13)
                 .focused($focused)
                 .onSubmit(commit)
 

@@ -34,6 +34,10 @@ struct PrioritiserApp: App {
                 Button("Quick Add Task") { model.requestQuickAdd() }
                     .keyboardShortcut("n", modifiers: .command)
             }
+            CommandGroup(after: .textEditing) {
+                Button("Find") { model.focusSearchToken += 1 }
+                    .keyboardShortcut("f", modifiers: .command)
+            }
         }
 
         // Settings (⌘,) mirrors the toolbar Tweaks popover.

@@ -60,7 +60,7 @@ struct QuickAddSpotlight: View {
                 .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 7))
             TextField("What needs doing?", text: $text)
                 .textFieldStyle(.plain)
-                .font(.system(size: 17))
+                .appFont(17, relativeTo: .title3)
                 .focused($focused)
                 .onSubmit(commit)
         }

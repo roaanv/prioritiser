@@ -5,6 +5,72 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — Slice 7: snooze scheduling + state persistence
+- **Auto-unsnooze** — snoozed tasks now return to the open state automatically when
+  their snooze date passes (run at launch, like a "scheduled for later" wake-up).
+  Marking a task Snoozed in the detail pane reveals a **Snooze until** date picker
+  (defaults to a week out); leaving the snoozed state clears the date.
+- **Folder drag-reorder** — folders can be dragged to reorder among their siblings;
+  the order persists to the folder `sort_order`. Cross-parent drops are ignored.
+- **Persisted UI state** — the sidebar selection, expanded folders, and inspected
+  task are saved (UserDefaults) and restored on relaunch, with validation that a
+  saved folder/task still exists.
+- Tests: auto-unsnooze (wakes past-due, keeps future), folder reorder (siblings +
+  cross-parent guard), and Selection round-trip — **36 tests total, all passing**.
+
+### Added — Slice 6: search, schedule, sort/filter, activity, reorder, Dynamic Type
+- **Search** — the sidebar field now filters the current view by title/notes as you
+  type, with a clear button; **⌘F** focuses it; the heading shows the result context.
+- **Schedule view** — the List/Schedule tabs are live; Schedule groups tasks into
+  Overdue / Today / Tomorrow / This Week / Later / No Date buckets.
+- **Sort & Filter menus** — sort by Manual / Priority score / Due date / Title /
+  Effort; filter by state (All / Open / In progress / Waiting).
+- **Activity feed** — real, persisted events (**migration v2** adds an `activity`
+  table and backfills a "created" event per existing task). Logs created, completed,
+  reopened, state, due, and folder changes, shown newest-first with relative times.
+- **Drag-reorder** — in All Tasks (manual sort, unfiltered, not searching) rows can
+  be dragged to reorder; the new order persists to `sort_order`.
+- **Dynamic Type** — an `.appFont` (`@ScaledMetric`) helper scales the primary text
+  with the system text size; the range is clamped (xSmall…accessibility1) to keep the
+  dense 3-pane layout usable. Micro-chrome (badges, key caps) stays fixed by design.
+- Tests: due bucketing, sort/filter helpers, and an AppModel integration suite
+  (search, activity logging, reorder) — **31 tests total, all passing**.
+
+### Changed — Slice 5: hardening (Swift 6 + accessibility)
+- Migrated the project to **Swift 6 language mode** (complete data-race safety /
+  strict concurrency). The pure-domain + `@MainActor` UI/store split meant this
+  compiled with no concurrency errors; the only touch-ups were a `Task {}` for a
+  deferred focus and a comment on the shared (Sendable) `NSRegularExpression`.
+- **Accessibility**:
+  - Task rows are single VoiceOver elements with a spoken summary (title, folder,
+    due, effort, impact, score, state) and the button/selected traits; the
+    completion checkbox remains its own labeled control.
+  - Icon-only controls (Tweaks, New folder, disclosure chevrons) now have labels;
+    the detail breadcrumb reads as a folder path.
+  - Decorative, not-yet-wired controls (List/Schedule tabs, Sort/Filter, header
+    glyphs) are hidden from the accessibility tree to cut VoiceOver noise.
+  - Quick-add overlay animation respects **Reduce Motion**.
+- Known limitation: fixed point sizes are kept for the dense desktop layout, so
+  full Dynamic Type scaling is not yet adopted (documented for a future pass).
+
+### Added — Slice 4: detail editing + folder management
+- Detail pane is now fully editable and persisted:
+  - **Notes** — inline editor (saves as you type).
+  - **Due date** — date picker with a clear button, or "Add due date" when unset.
+  - **Effort** — preset menu (Unestimated, 5m … 3d).
+  - **Folder** — reassign via a menu of all folders (shown as full paths).
+  - (Impact / priority / state segmented controls already landed in slice 1.)
+- **Folder management** in the sidebar: a "+" header button creates a folder, the
+  context menu offers Rename (inline) / New Subfolder / Delete, and renaming is in-place.
+- Deleting a folder **never loses task data**: its tasks move to the parent (or
+  Inbox) and its child folders reparent up one level. System folders (Inbox) are
+  protected. New folders get cycling OKLCH accent colors and slug-style ids.
+- **"All Tasks" now includes snoozed tasks** (excluding only completed), so snoozing
+  a task is no longer a one-way door — you can find and un-snooze it there.
+- Tests: migration runner, first-run seeding, insert/update round-trip, folder-delete
+  data preservation, system-folder protection, and the snoozed-in-All filter
+  (24 tests total, all passing).
+
 ### Added — Slice 3: theming UI
 - `TweaksView` preferences (shared by a toolbar popover and the Settings ⌘, window):
   - **Appearance** — System / Light / Dark, applied via `preferredColorScheme`.

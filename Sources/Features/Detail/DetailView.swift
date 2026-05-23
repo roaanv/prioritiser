@@ -13,7 +13,9 @@ struct DetailView: View {
     var body: some View {
         Group {
             if let task = model.selectedTask {
-                DetailContent(task: task)
+                // .id keeps editor state (notes draft) stable per task and resets
+                // it when a different task is selected.
+                DetailContent(task: task).id(task.id)
             } else {
                 emptyState
             }
@@ -46,6 +48,13 @@ private struct DetailContent: View {
     @Environment(\.colorScheme) private var scheme
     let task: TaskItem
 
+    /// Local editing buffer for notes (persisted on change), kept stable across the
+    /// re-renders that editing triggers. Reset by the parent's `.id(task.id)`.
+    @State private var notesDraft = ""
+
+    /// Common effort presets offered in the effort menu (minutes).
+    private let effortPresets = [5, 10, 15, 30, 45, 60, 120, 240, 480, 960, 1440]
+
     private var folder: Folder? { model.folder(id: task.folderId) }
     private var path: [Folder] { folder.map { FolderTree.path(to: $0.id, in: model.folders) } ?? [] }
 
@@ -66,6 +75,7 @@ private struct DetailContent: View {
                 .padding(.bottom, 28)
             }
         }
+        .onAppear { notesDraft = task.notes ?? "" }
     }
 
     // MARK: - Header
@@ -74,6 +84,7 @@ private struct DetailContent: View {
         HStack(spacing: 8) {
             Image(systemName: "flag")
                 .foregroundStyle(.secondary).frame(width: 26, height: 26)
+                .accessibilityHidden(true)
             HStack(spacing: 4) {
                 ForEach(Array(path.enumerated()), id: \.element.id) { index, folder in
                     if index > 0 { Text("›").foregroundStyle(.tertiary) }
@@ -84,9 +95,12 @@ private struct DetailContent: View {
             }
             .font(.system(size: 12))
             .lineLimit(1)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Folder path: " + path.map(\.name).joined(separator: ", "))
             Spacer()
             Image(systemName: "ellipsis")
                 .foregroundStyle(.secondary).frame(width: 26, height: 26)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
     }
@@ -96,7 +110,7 @@ private struct DetailContent: View {
             CompletionToggle(task: task) { model.toggleDone(task) }
                 .padding(.top, 3)
             Text(task.title)
-                .font(.system(size: 19, weight: .semibold))
+                .appFont(19, weight: .semibold, relativeTo: .title2)
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -108,7 +122,7 @@ private struct DetailContent: View {
         let components = PriorityScorer.components(for: task, clock: model.clock)
         return HStack(alignment: .center, spacing: 16) {
             Text("\(model.score(for: task))")
-                .font(.system(size: 38, weight: .bold))
+                .appFont(38, weight: .bold, relativeTo: .largeTitle)
                 .monospacedDigit()
                 .foregroundStyle(Color.accentColor)
             VStack(alignment: .leading, spacing: 6) {
@@ -156,20 +170,11 @@ private struct DetailContent: View {
 
     private var fields: some View {
         VStack(spacing: 0) {
-            field("Folder") {
-                HStack(spacing: 6) {
-                    if let folder { RoundedRectangle(cornerRadius: 2).fill(folder.tint).frame(width: 8, height: 8) }
-                    Text(folder?.name ?? "Unfiled")
-                }
-            }
+            field("Folder") { folderMenu }
             Divider().opacity(0.4)
-            field("Due") {
-                let overdue = (model.clock.daysUntil(task.due) ?? 0) < 0
-                Text(dueText)
-                    .foregroundStyle(overdue ? Palette.overdueText(scheme: scheme) : .primary)
-            }
+            field("Due") { dueEditor }
             Divider().opacity(0.4)
-            field("Effort") { Text(Formatting.effort(task.effortMinutes) ?? "Unestimated") }
+            field("Effort") { effortMenu }
             Divider().opacity(0.4)
             field("Impact") {
                 Picker("", selection: levelBinding(\.impact)) {
@@ -191,26 +196,100 @@ private struct DetailContent: View {
                 }
                 .pickerStyle(.segmented).labelsHidden()
             }
+            if task.state == .snoozed {
+                Divider().opacity(0.4)
+                field("Snooze until") {
+                    DatePicker("", selection: snoozeBinding, displayedComponents: .date)
+                        .labelsHidden().datePickerStyle(.compact).fixedSize()
+                }
+            }
         }
     }
 
     private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         HStack(alignment: .center, spacing: 8) {
             Text(label)
-                .font(.system(size: 12.5)).foregroundStyle(.secondary)
+                .appFont(12.5).foregroundStyle(.secondary)
                 .frame(width: 80, alignment: .leading)
             content()
-                .font(.system(size: 12.5))
+                .appFont(12.5)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 8)
     }
 
-    private var dueText: String {
-        guard let due = task.due else { return "No due date" }
-        let absolute = Formatting.date(due, clock: model.clock) ?? ""
-        let relative = Formatting.dueLabel(due, clock: model.clock) ?? ""
-        return "\(absolute)  ·  \(relative)"
+    // MARK: - Editors
+
+    private var folderMenu: some View {
+        Menu {
+            ForEach(model.folders) { option in
+                Button {
+                    setField { $0.folderId = option.id }
+                } label: {
+                    Text(folderPathLabel(option))
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                if let folder { RoundedRectangle(cornerRadius: 2).fill(folder.tint).frame(width: 8, height: 8) }
+                Text(folder?.name ?? "Unfiled")
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 9)).foregroundStyle(.tertiary)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    @ViewBuilder
+    private var dueEditor: some View {
+        if task.due != nil {
+            HStack(spacing: 8) {
+                DatePicker("", selection: dueBinding, displayedComponents: .date)
+                    .labelsHidden().datePickerStyle(.compact).fixedSize()
+                let overdue = (model.clock.daysUntil(task.due) ?? 0) < 0
+                Text(Formatting.dueLabel(task.due, clock: model.clock) ?? "")
+                    .foregroundStyle(overdue ? Palette.overdueText(scheme: scheme) : .secondary)
+                Button { setField { $0.due = nil } } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.plain).foregroundStyle(.tertiary)
+                .help("Clear due date")
+            }
+        } else {
+            Button("Add due date") { setField { $0.due = model.clock.today } }
+                .buttonStyle(.link)
+        }
+    }
+
+    private var effortMenu: some View {
+        Menu {
+            Button("Unestimated") { setField { $0.effortMinutes = nil } }
+            ForEach(effortPresets, id: \.self) { minutes in
+                Button(Formatting.effort(minutes) ?? "") { setField { $0.effortMinutes = minutes } }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(Formatting.effort(task.effortMinutes) ?? "Unestimated")
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 9)).foregroundStyle(.tertiary)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    private func folderPathLabel(_ folder: Folder) -> String {
+        FolderTree.path(to: folder.id, in: model.folders).map(\.name).joined(separator: " › ")
+    }
+
+    /// Mutate a copy of the task and persist it.
+    private func setField(_ mutate: (inout TaskItem) -> Void) {
+        var next = task
+        mutate(&next)
+        model.update(next)
+    }
+
+    private var dueBinding: Binding<Date> {
+        Binding(get: { task.due ?? model.clock.today }, set: { date in setField { $0.due = date } })
     }
 
     // MARK: - Notes & activity
@@ -218,14 +297,22 @@ private struct DetailContent: View {
     private var notes: some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionLabel("Notes")
-            if let text = task.notes, !text.isEmpty {
-                Text(text)
-                    .font(.system(size: 12.5)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("Click to add notes…")
-                    .font(.system(size: 12.5)).italic().foregroundStyle(.tertiary)
-            }
+            TextEditor(text: $notesDraft)
+                .appFont(12.5)
+                .foregroundStyle(.secondary)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 56)
+                .overlay(alignment: .topLeading) {
+                    if notesDraft.isEmpty {
+                        Text("Add notes…")
+                            .font(.system(size: 12.5)).italic().foregroundStyle(.tertiary)
+                            .padding(.top, 1)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .onChange(of: notesDraft) { _, new in
+                    setField { $0.notes = new.isEmpty ? nil : new }
+                }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14).padding(.vertical, 12)
@@ -236,22 +323,40 @@ private struct DetailContent: View {
     private var activity: some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionLabel("Activity")
-            activityRow(color: .secondary, "Created  ·  3 days ago")
-            if task.state == .inProgress {
-                activityRow(color: OKLCH(0.65, 0.15, 50).color, "Marked in progress  ·  yesterday")
+            let events = model.activity(for: task.id)
+            if events.isEmpty {
+                Text("No activity yet.").font(.system(size: 11.5)).foregroundStyle(.tertiary)
+            } else {
+                ForEach(events) { event in
+                    HStack(spacing: 8) {
+                        Image(systemName: event.kind.systemImage)
+                            .font(.system(size: 9))
+                            .foregroundStyle(color(for: event.kind))
+                            .frame(width: 11)
+                        Text(event.summary).foregroundStyle(.secondary)
+                        Text("·").foregroundStyle(.tertiary)
+                        Text(relativeTime(event.timestamp)).foregroundStyle(.tertiary)
+                    }
+                    .font(.system(size: 11.5))
+                }
             }
-            if task.state == .waiting {
-                activityRow(color: OKLCH(0.62, 0.12, 280).color, "Marked waiting  ·  Mon May 18")
-            }
-            activityRow(color: Color.accentColor, "Score recomputed  ·  just now")
         }
     }
 
-    private func activityRow(color: Color, _ text: String) -> some View {
-        HStack(spacing: 8) {
-            Circle().fill(color).frame(width: 6, height: 6)
-            Text(text).font(.system(size: 11.5)).foregroundStyle(.secondary)
+    private func color(for kind: ActivityKind) -> Color {
+        switch kind {
+        case .created: return .secondary
+        case .completed: return OKLCH(0.60, 0.15, 145).color   // green
+        case .reopened: return .secondary
+        case .stateChanged: return OKLCH(0.65, 0.15, 50).color  // orange
+        case .dueChanged, .folderChanged: return Color.accentColor
         }
+    }
+
+    private func relativeTime(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: date, relativeTo: model.clock.now)
     }
 
     private func sectionLabel(_ text: String) -> some View {
@@ -272,7 +377,26 @@ private struct DetailContent: View {
     private var stateBinding: Binding<TaskState> {
         Binding(
             get: { task.state == .done ? .open : task.state },
-            set: { var next = task; next.state = $0; model.update(next) }
+            set: { newState in
+                setField { next in
+                    next.state = newState
+                    // Snoozing defaults to a week out; leaving snooze clears the date.
+                    if newState == .snoozed {
+                        if next.snoozedUntil == nil {
+                            next.snoozedUntil = model.clock.addingDays(7, to: model.clock.today)
+                        }
+                    } else {
+                        next.snoozedUntil = nil
+                    }
+                }
+            }
+        )
+    }
+
+    private var snoozeBinding: Binding<Date> {
+        Binding(
+            get: { task.snoozedUntil ?? model.clock.addingDays(7, to: model.clock.today) },
+            set: { date in setField { $0.snoozedUntil = date } }
         )
     }
 }

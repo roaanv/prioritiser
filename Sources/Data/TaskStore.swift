@@ -135,6 +135,53 @@ final class TaskStore {
         return stmt.step() ? (stmt.int(0) ?? 0) : 0
     }
 
+    /// Update only a task's list position (used by drag-reorder).
+    func updateSortOrder(id: String, sortOrder: Int) {
+        guard let stmt = try? db.prepare("UPDATE tasks SET sort_order = ?2 WHERE id = ?1;") else { return }
+        defer { stmt.finalize() }
+        stmt.bind(1, id).bind(2, sortOrder)
+        try? stmt.run()
+    }
+
+    // MARK: - Activity
+
+    func appendActivity(_ event: ActivityEvent) {
+        guard let stmt = try? db.prepare("""
+            INSERT OR REPLACE INTO activity (id, task_id, kind, detail, timestamp)
+            VALUES (?1, ?2, ?3, ?4, ?5);
+            """) else { return }
+        defer { stmt.finalize() }
+        stmt.bind(1, event.id)
+            .bind(2, event.taskId)
+            .bind(3, event.kind.rawValue)
+            .bind(4, event.detail)
+            .bind(5, event.timestamp.timeIntervalSince1970)
+        try? stmt.run()
+    }
+
+    /// Activity for a task, newest first.
+    func loadActivity(taskId: String) -> [ActivityEvent] {
+        guard let stmt = try? db.prepare("""
+            SELECT id, task_id, kind, detail, timestamp FROM activity
+            WHERE task_id = ?1 ORDER BY timestamp DESC;
+            """) else { return [] }
+        defer { stmt.finalize() }
+        stmt.bind(1, taskId)
+
+        var events: [ActivityEvent] = []
+        while stmt.step() {
+            guard let kind = ActivityKind(rawValue: stmt.text(2) ?? "") else { continue }
+            events.append(ActivityEvent(
+                id: stmt.text(0) ?? "",
+                taskId: stmt.text(1) ?? "",
+                kind: kind,
+                detail: stmt.text(3),
+                timestamp: Date(timeIntervalSince1970: stmt.double(4) ?? 0)
+            ))
+        }
+        return events
+    }
+
     func deleteTask(id: String) {
         guard let stmt = try? db.prepare("DELETE FROM tasks WHERE id = ?1;") else { return }
         defer { stmt.finalize() }
@@ -142,7 +189,8 @@ final class TaskStore {
         try? stmt.run()
     }
 
-    private func saveFolder(_ folder: Folder, sortOrder: Int) {
+    /// Insert a folder (or replace one with the same id).
+    func insertFolder(_ folder: Folder, sortOrder: Int) {
         guard let stmt = try? db.prepare("""
             INSERT OR REPLACE INTO folders
               (id, name, parent_id, color_l, color_c, color_h, is_system, sort_order)
@@ -160,6 +208,59 @@ final class TaskStore {
         try? stmt.run()
     }
 
+    /// Update a folder's name / parent / color (leaving sort order untouched).
+    func updateFolder(_ folder: Folder) {
+        guard let stmt = try? db.prepare("""
+            UPDATE folders SET name = ?2, parent_id = ?3, color_l = ?4, color_c = ?5, color_h = ?6
+            WHERE id = ?1;
+            """) else { return }
+        defer { stmt.finalize() }
+        stmt.bind(1, folder.id)
+            .bind(2, folder.name)
+            .bind(3, folder.parentId)
+            .bind(4, folder.color.l)
+            .bind(5, folder.color.c)
+            .bind(6, folder.color.h)
+        try? stmt.run()
+    }
+
+    /// Delete a (non-system) folder without losing data: its direct tasks are
+    /// reassigned to `reassignTasksTo`, and its direct child folders are reparented
+    /// to `reparentChildrenTo`. Tasks in descendant folders stay where they are.
+    func deleteFolder(id: String, reassignTasksTo: String, reparentChildrenTo: String?) {
+        try? db.transaction {
+            let move = try db.prepare("UPDATE tasks SET folder_id = ?2 WHERE folder_id = ?1;")
+            defer { move.finalize() }
+            move.bind(1, id).bind(2, reassignTasksTo)
+            try move.run()
+
+            let reparent = try db.prepare("UPDATE folders SET parent_id = ?2 WHERE parent_id = ?1;")
+            defer { reparent.finalize() }
+            reparent.bind(1, id).bind(2, reparentChildrenTo)
+            try reparent.run()
+
+            let remove = try db.prepare("DELETE FROM folders WHERE id = ?1 AND is_system = 0;")
+            defer { remove.finalize() }
+            remove.bind(1, id)
+            try remove.run()
+        }
+    }
+
+    /// Update only a folder's list position (used by folder drag-reorder).
+    func updateFolderSortOrder(id: String, sortOrder: Int) {
+        guard let stmt = try? db.prepare("UPDATE folders SET sort_order = ?2 WHERE id = ?1;") else { return }
+        defer { stmt.finalize() }
+        stmt.bind(1, id).bind(2, sortOrder)
+        try? stmt.run()
+    }
+
+    /// The largest folder `sort_order` (so new folders append after existing ones).
+    func maxFolderSortOrder() -> Int {
+        guard let stmt = try? db.prepare("SELECT MAX(sort_order) FROM folders;") else { return 0 }
+        defer { stmt.finalize() }
+        return stmt.step() ? (stmt.int(0) ?? 0) : 0
+    }
+
     // MARK: - Seeding
 
     private func seedIfEmpty(clock: TaskClock) throws {
@@ -170,10 +271,21 @@ final class TaskStore {
 
         try db.transaction {
             for (index, folder) in SeedData.folders.enumerated() {
-                saveFolder(folder, sortOrder: index)
+                insertFolder(folder, sortOrder: index)
             }
             for (index, task) in SeedData.tasks(clock: clock).enumerated() {
                 insert(task, sortOrder: index)
+                appendActivity(ActivityEvent(id: "created-\(task.id)", taskId: task.id,
+                                             kind: .created, timestamp: task.createdAt))
+                if task.state == .inProgress {
+                    appendActivity(ActivityEvent(taskId: task.id, kind: .stateChanged,
+                                                 detail: "In progress",
+                                                 timestamp: clock.addingDays(-1, to: clock.today)))
+                } else if task.state == .waiting {
+                    appendActivity(ActivityEvent(taskId: task.id, kind: .stateChanged,
+                                                 detail: "Waiting",
+                                                 timestamp: clock.addingDays(-2, to: clock.today)))
+                }
             }
         }
     }

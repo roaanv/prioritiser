@@ -64,9 +64,33 @@ Tests/        PrioritiserTests (Swift Testing): scorer, parser, formatting, filt
 - **Slice 2** — Quick-add: live parse + preview chips; ⌘N Spotlight capture. ✅ COMPLETE
 - **Slice 3** — Theming UI: appearance (System/Light/Dark); accent picker in
   toolbar popover + Settings; priority-viz modes (cards/bars/heat). ✅ COMPLETE
-- **Slice 4** — Detail editing wired to store (impact/priority/state segmented,
-  notes editing), folder CRUD, persistence of all mutations + migrations test.
-- **Slice 5** — Hardening: Swift 6 concurrency, accessibility, polish, perf.
+- **Slice 4** — Detail editing wired to store (notes/due/effort/folder editors),
+  folder CRUD (add/rename/delete with data-preserving reassignment), Snoozed
+  reachable via "All Tasks", migration + persistence tests. ✅ COMPLETE
+- **Slice 5** — Hardening: Swift 6 strict concurrency, accessibility (VoiceOver
+  labels/traits, reduce-motion), polish. ✅ COMPLETE
+  - Deferred: full Dynamic Type scaling (kept fixed sizes for the dense layout).
+
+## Slice 6 — fill the functional gaps ✅ COMPLETE
+- **Search** — sidebar field filters the current view by title/notes; ⌘F focuses it.
+- **Schedule view** — List/Schedule tabs toggle; Schedule groups tasks by due bucket
+  (Overdue / Today / Tomorrow / This week / Later / No date).
+- **Sort / Filter** — toolbar menus: sort (Manual/Score/Due/Title/Effort) and a
+  state filter (All/Open/In progress/Waiting).
+- **Activity feed** — real, persisted events (migration v2: `activity` table). Logs
+  created / completed / reopened / state / due / folder changes; backfills created.
+- **Drag-reorder** — manual reordering in All Tasks (manual sort, unfiltered),
+  persisted to `sort_order`.
+- **Dynamic Type** — text scales via a `.appFont` (`@ScaledMetric`) helper, clamped
+  to a sane range to protect the dense layout.
+
+## Slice 7 — snooze scheduling + state persistence ✅ COMPLETE
+- Auto-unsnooze on launch + a "Snooze until" date picker in the detail pane.
+- Folder drag-reorder (sibling reorder, persisted).
+- Persisted sidebar selection / expanded folders / inspected task across launches.
+
+## Beyond the plan (still not built)
+- App icon + signed/notarized distribution (the `make deploy` archive is unsigned).
 
 ## Verification per slice
 - `make build` compiles clean.

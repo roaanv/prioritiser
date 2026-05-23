@@ -40,6 +40,7 @@ enum PrefixParser {
     // Matches a token at a word boundary. Based on the prototype regex, with a
     // `(?!:)` lookahead on the due-date continuation words so a `due:` argument
     // can't swallow the head of a following prefix token (e.g. the "t" of "t:1h").
+    // NSRegularExpression is Sendable, so this shared instance is concurrency-safe.
     private static let regex = try! NSRegularExpression(
         pattern: #"(^|\s)(?:#([a-zA-Z0-9_-]+)|(due):(?:"([^"]+)"|([^\s][^\s]*(?:\s+[a-zA-Z0-9]+(?!:)){0,2}))|(t):(\d+(?:\.\d+)?[mhd])|([ip]):([hml]))"#,
         options: [.caseInsensitive]

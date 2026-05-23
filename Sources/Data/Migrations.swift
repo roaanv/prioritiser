@@ -8,7 +8,7 @@ import Foundation
 
 enum Migrations {
     /// The schema version this build expects.
-    static let latestVersion = 1
+    static let latestVersion = 2
 
     /// Apply any pending migrations to bring `db` up to `latestVersion`.
     static func migrate(_ db: Database) throws {
@@ -20,7 +20,10 @@ enum Migrations {
                 try v1(db)
                 version = 1
             }
-            // Future: if version < 2 { try v2(db); version = 2 }
+            if version < 2 {
+                try v2(db)
+                version = 2
+            }
         }
         db.userVersion = latestVersion
     }
@@ -55,6 +58,25 @@ enum Migrations {
         );
 
         CREATE INDEX idx_tasks_folder ON tasks(folder_id);
+        """)
+    }
+
+    /// v2 — activity log. Backfills a "created" event for any pre-existing tasks
+    /// so their feed isn't empty after upgrading.
+    private static func v2(_ db: Database) throws {
+        try db.execute("""
+        CREATE TABLE activity (
+            id          TEXT PRIMARY KEY,
+            task_id     TEXT NOT NULL,
+            kind        TEXT NOT NULL,
+            detail      TEXT,
+            timestamp   REAL NOT NULL
+        );
+
+        CREATE INDEX idx_activity_task ON activity(task_id);
+
+        INSERT INTO activity (id, task_id, kind, detail, timestamp)
+            SELECT 'created-' || id, id, 'created', NULL, created_at FROM tasks;
         """)
     }
 }

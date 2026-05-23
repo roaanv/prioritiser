@@ -49,6 +49,13 @@ struct TaskFilterTests {
         #expect(overdue.allSatisfy { (clock.daysUntil($0.due) ?? 0) < 0 })
     }
 
+    @Test("All Tasks includes snoozed but excludes done")
+    func allIncludesSnoozed() {
+        let all = TaskFilter.tasks(for: .all, in: tasks, clock: clock)
+        #expect(all.contains { $0.id == "t18" })          // t18 is snoozed
+        #expect(all.allSatisfy { $0.state != .done })
+    }
+
     @Test("Folder slug resolves by id and by space-stripped name")
     func slugResolution() {
         #expect(FolderTree.folder(forSlug: "prioritiser", in: folders)?.id == "prioritiser")

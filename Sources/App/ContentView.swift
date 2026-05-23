@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("accent") private var accent: AppAccent = .blue
     @AppStorage("appearance") private var appearance: AppAppearance = .system
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -28,6 +29,8 @@ struct ContentView: View {
         .navigationSplitViewStyle(.balanced)
         .tint(accent.color)
         .preferredColorScheme(appearance.colorScheme)
+        // Support Dynamic Type, clamped so the dense 3-pane layout stays usable.
+        .dynamicTypeSize(.xSmall ... .accessibility1)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -36,6 +39,7 @@ struct ContentView: View {
                     Image(systemName: "slider.horizontal.3")
                 }
                 .help("Tweaks")
+                .accessibilityLabel("Tweaks")
                 .popover(isPresented: $showTweaks, arrowEdge: .bottom) {
                     TweaksView()
                 }
@@ -50,6 +54,6 @@ struct ContentView: View {
                 .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.14), value: model.quickAddRequested)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.quickAddRequested)
     }
 }

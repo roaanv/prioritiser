@@ -8,7 +8,10 @@ import SwiftUI
 
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
-    @State private var searchText = ""
+    @State private var editingFolderID: String?
+    @State private var draftName = ""
+    @FocusState private var renameFocused: Bool
+    @FocusState private var searchFocused: Bool
 
     /// Gold tint for the "Top Priorities" spark icon (prototype: oklch 0.62 0.18 60).
     private let topTint = OKLCH(0.62, 0.18, 60).color
@@ -17,7 +20,7 @@ struct SidebarView: View {
         @Bindable var model = model
 
         List(selection: selectionBinding(for: model)) {
-            SearchField(text: $searchText)
+            SearchField(text: $model.searchQuery, focused: $searchFocused)
                 .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 8, trailing: 8))
                 .listRowSeparator(.hidden)
                 .selectionDisabled()
@@ -29,15 +32,34 @@ struct SidebarView: View {
                 }
             }
 
-            Section("Folders") {
+            Section {
                 ForEach(flattenedFolders, id: \.folder.id) { item in
                     folderRow(item)
                         .tag(Selection.folder(item.folder.id))
                 }
+            } header: {
+                foldersHeader
             }
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) { userFooter }
+        .onChange(of: model.focusSearchToken) { searchFocused = true }
+    }
+
+    private var foldersHeader: some View {
+        HStack {
+            Text("Folders")
+            Spacer()
+            Button {
+                startNewFolder(parentID: nil)
+            } label: {
+                Image(systemName: "plus").font(.system(size: 10, weight: .semibold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("New folder")
+            .accessibilityLabel("New folder")
+        }
     }
 
     // MARK: - Rows
@@ -59,7 +81,7 @@ struct SidebarView: View {
                 badge(count, alert: view.isAlert, selected: selected)
             }
         }
-        .font(.system(size: 13))
+        .appFont(13)
     }
 
     @ViewBuilder
@@ -68,6 +90,7 @@ struct SidebarView: View {
         let selected = model.selection == .folder(folder.id)
         let hasChildren = model.folders.contains { $0.parentId == folder.id }
         let count = TaskFilter.folderCount(folder.id, tasks: model.tasks, folders: model.folders)
+        let isEditing = editingFolderID == folder.id
 
         HStack(spacing: 6) {
             disclosure(folder: folder, hasChildren: hasChildren, selected: selected)
@@ -75,14 +98,57 @@ struct SidebarView: View {
                 .font(.system(size: 12))
                 .frame(width: 16)
                 .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(folder.tint))
-            Text(folder.name)
-                .foregroundStyle(selected ? .white : .primary)
-                .lineLimit(1)
+            if isEditing {
+                TextField("Folder name", text: $draftName)
+                    .textFieldStyle(.plain)
+                    .focused($renameFocused)
+                    .onSubmit(commitRename)
+                    .onChange(of: renameFocused) { _, focused in if !focused { commitRename() } }
+            } else {
+                Text(folder.name)
+                    .foregroundStyle(selected ? .white : .primary)
+                    .lineLimit(1)
+            }
             Spacer(minLength: 4)
-            if count > 0 { badge(count, alert: false, selected: selected) }
+            if count > 0 && !isEditing { badge(count, alert: false, selected: selected) }
         }
-        .font(.system(size: 13))
+        .appFont(13)
         .padding(.leading, CGFloat(item.depth) * 14)
+        .contextMenu {
+            Button("Rename") { beginRename(folder) }
+            Button("New Subfolder") { startNewFolder(parentID: folder.id) }
+            if !folder.isSystem {
+                Divider()
+                Button("Delete", role: .destructive) { model.deleteFolder(id: folder.id) }
+            }
+        }
+        .draggable(folder.id)
+        .dropDestination(for: String.self) { items, _ in
+            // Reorder among siblings (moveFolder ignores cross-parent drops).
+            if let dragged = items.first { model.moveFolder(dragged, before: folder.id) }
+            return true
+        }
+    }
+
+    // MARK: - Folder editing
+
+    private func startNewFolder(parentID: String?) {
+        let id = model.addFolder(name: "New Folder", parentId: parentID)
+        model.selection = .folder(id)
+        editingFolderID = id
+        draftName = "New Folder"
+        Task { renameFocused = true } // next runloop tick, on the main actor
+    }
+
+    private func beginRename(_ folder: Folder) {
+        editingFolderID = folder.id
+        draftName = folder.name
+        Task { renameFocused = true }
+    }
+
+    private func commitRename() {
+        if let id = editingFolderID { model.renameFolder(id: id, to: draftName) }
+        editingFolderID = nil
     }
 
     @ViewBuilder
@@ -98,6 +164,7 @@ struct SidebarView: View {
                     .frame(width: 12, height: 12)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(model.expandedFolders.contains(folder.id) ? "Collapse" : "Expand")
         } else {
             Color.clear.frame(width: 12, height: 12)
         }
@@ -159,9 +226,10 @@ struct SidebarView: View {
     }
 }
 
-/// A non-functional rounded search field matching the prototype's sidebar search.
+/// The sidebar search field; filters the task list as you type. ⌘F focuses it.
 private struct SearchField: View {
     @Binding var text: String
+    var focused: FocusState<Bool>.Binding
 
     var body: some View {
         HStack(spacing: 6) {
@@ -171,7 +239,16 @@ private struct SearchField: View {
             TextField("Search", text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
-            KeyCap("⌘F")
+                .focused(focused)
+            if text.isEmpty {
+                KeyCap("⌘F")
+            } else {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 11))
+                }
+                .buttonStyle(.plain).foregroundStyle(.tertiary)
+                .accessibilityLabel("Clear search")
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)

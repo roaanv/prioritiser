@@ -7,18 +7,23 @@ prototype.
 
 ## Status
 
-**Slices 1–3 complete.** The three-pane app runs against a seeded SQLite store: a
-translucent sidebar (smart views + Finder-style folder tree), the task list (with
-the auto-ranked Top-5 band), and an always-on detail inspector (score breakdown +
-editable impact/priority/state). Quick-add parses the prefix grammar as you type
-and shows live preview chips, and **⌘N** opens a Spotlight-style capture. A toolbar
-**Tweaks** popover (and the Settings ⌘, window) controls appearance (System/Light/
-Dark), accent color, and priority visualization (cards/bars/heat). See
+**Slices 1–5 complete — the planned build is done.** The three-pane app runs against
+a seeded SQLite store: a translucent sidebar (smart views + a Finder-style folder tree
+with add/rename/delete), the task list (with the auto-ranked Top-5 band), and an
+always-on detail inspector with a **fully editable** task (notes, due date, effort,
+folder, impact, priority, state — all persisted). Quick-add parses the prefix grammar
+as you type and shows live preview chips, and **⌘N** opens a Spotlight-style capture.
+A toolbar **Tweaks** popover (and the Settings ⌘, window) controls appearance
+(System/Light/Dark), accent color, and priority visualization (cards/bars/heat).
+Deleting a folder never loses tasks. The code builds in **Swift 6** strict-concurrency
+mode and has a VoiceOver accessibility pass. See
 [`plans/prioritiser-macos-implementation.md`](plans/prioritiser-macos-implementation.md)
-for the full roadmap and [`changelog.md`](changelog.md) for what's landed.
+for the roadmap and [`changelog.md`](changelog.md) for details.
 
-Later slices add: full detail/notes/folder editing, and a Swift 6 concurrency
-hardening pass.
+Search (⌘F), the Schedule view, Sort/Filter menus, a persisted activity feed,
+drag-reorder (All Tasks), and Dynamic Type are all wired up too. The remaining
+follow-up is an app icon + signed/notarized distribution (the `make deploy` archive
+is currently unsigned).
 
 ## Requirements
 

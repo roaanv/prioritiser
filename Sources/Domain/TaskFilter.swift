@@ -36,7 +36,9 @@ enum TaskFilter {
         case .inbox:
             return live.filter { $0.folderId == Folder.inboxID }
         case .all:
-            return live
+            // "All Tasks" includes snoozed (the place to find + un-snooze them);
+            // only completed tasks are hidden.
+            return tasks.filter { $0.state != .done }
         }
     }
 
@@ -45,7 +47,8 @@ enum TaskFilter {
         live(tasks).filter { FolderTree.isDescendant($0.folderId, ofOrEqual: folderId, in: folders) }
     }
 
-    /// Sidebar badge count for a smart view. "Top" caps at 5 (the Top-5 band).
+    /// Sidebar badge count for a smart view. "Top" caps at 5 (the Top-5 band);
+    /// every other view reports the size of its filtered set.
     static func badgeCount(
         for view: SmartView,
         tasks: [TaskItem],

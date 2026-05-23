@@ -29,20 +29,39 @@ struct TaskRowView: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            if isCard { rankColumn }
+            if isCard { rankColumn.accessibilityHidden(true) }
             CompletionToggle(task: task) { model.toggleDone(task) }
-            titleAndChips
-            Spacer(minLength: 8)
-            rightColumn
+            HStack(alignment: .center, spacing: 12) {
+                titleAndChips
+                Spacer(minLength: 8)
+                rightColumn
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { model.selectedTaskID = task.id }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
         }
         .padding(.top, isTopCard ? 14 : 10)
         .padding(.bottom, (isTopCard ? 14 : 10) + (showBar ? 8 : 0))
         .padding(.horizontal, 14)
         .background(rowBackground)
         .overlay(rowBorder)
-        .overlay(alignment: .bottom) { if showBar { scoreBar } }
-        .contentShape(Rectangle())
-        .onTapGesture { model.selectedTaskID = task.id }
+        .overlay(alignment: .bottom) { if showBar { scoreBar.accessibilityHidden(true) } }
+    }
+
+    /// Spoken description for VoiceOver, e.g. "Ship beta, Prioritiser, due Tomorrow,
+    /// 3h, impact High, score 86, In progress".
+    private var accessibilityLabel: String {
+        var parts = [task.title]
+        if let folder = model.folder(id: task.folderId) { parts.append(folder.name) }
+        if let due = Formatting.dueLabel(task.due, clock: model.clock) { parts.append("due \(due)") }
+        if let effort = Formatting.effort(task.effortMinutes) { parts.append(effort) }
+        parts.append("impact \(task.impact.label)")
+        parts.append("score \(score)")
+        if task.state != .open { parts.append(task.state.label) }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Columns
@@ -71,7 +90,7 @@ struct TaskRowView: View {
             HStack(spacing: 6) {
                 stateGlyph
                 Text(task.title)
-                    .font(.system(size: isTopCard ? 15 : 13.5, weight: isTopCard || isSelected ? .semibold : .regular))
+                    .appFont(isTopCard ? 15 : 13.5, weight: isTopCard || isSelected ? .semibold : .regular)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
             }
@@ -100,7 +119,7 @@ struct TaskRowView: View {
         HStack(spacing: 10) {
             ImpactPips(level: task.impact, activeColor: isSelected ? Color.accentColor : .secondary)
             Text("\(score)")
-                .font(.system(size: 11.5, weight: .semibold))
+                .appFont(11.5, weight: .semibold)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
                 .frame(minWidth: 24, alignment: .trailing)

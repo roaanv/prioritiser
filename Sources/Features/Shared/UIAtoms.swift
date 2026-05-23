@@ -41,7 +41,7 @@ struct MetaChip: View {
             }
             Text(text)
         }
-        .font(.system(size: 11.5, weight: .medium))
+        .appFont(11.5, weight: .medium)
         .monospacedDigit()
         .foregroundStyle(colors.foreground)
         .padding(.leading, dotColor != nil ? 6 : 7)

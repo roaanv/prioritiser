@@ -5,6 +5,18 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — global quick-capture hotkey + menu-bar item
+- A **system-wide, configurable** hotkey (default **⌃⌥⌘T**) pops a floating capture
+  box from any app — type a task (the full `#project due: t: i: p:` grammar works),
+  Enter saves it, Esc/the hotkey again dismisses. Registered via Carbon
+  `RegisterEventHotKey`, so it needs no Accessibility permission. Set/rebind it in
+  **Settings → Quick Capture** with a click-to-record control (Reset restores default).
+- A **menu-bar item** (checklist icon) offers Quick Capture (showing the shortcut),
+  Open Prioritiser, and Quit — so capture is available even with the window closed.
+- New: `CaptureShortcut` (Codable, persisted), `GlobalHotKey` (Carbon wrapper),
+  `CaptureController` (owns the hotkey + floating `NSPanel`), `QuickCaptureView`,
+  `ShortcutRecorder`. Pure-logic tests for the shortcut (**66 tests** total).
+
 ### Added — arrow-key list navigation
 - **↑ / ↓** move the selection up and down the visible task list (matching the on-screen
   order, including the schedule buckets and top-priority bands) and scroll the selected

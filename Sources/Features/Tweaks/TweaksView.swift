@@ -10,6 +10,7 @@ struct TweaksView: View {
     @AppStorage("appearance") private var appearance: AppAppearance = .system
     @AppStorage("accent") private var accent: AppAccent = .blue
     @AppStorage("priorityViz") private var viz: PriorityVizMode = .cards
+    @Environment(CaptureController.self) private var capture
 
     var body: some View {
         Form {
@@ -29,6 +30,15 @@ struct TweaksView: View {
                     ForEach(PriorityVizMode.allCases) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.radioGroup)
+            }
+
+            Section("Quick Capture") {
+                LabeledContent("Global shortcut") {
+                    ShortcutRecorder(controller: capture)
+                }
+                Text("Press this shortcut from any app to capture a task.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

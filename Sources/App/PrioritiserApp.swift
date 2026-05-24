@@ -3,10 +3,12 @@
 // AppModel, and hosts the three-pane window.
 
 import SwiftUI
+import AppKit
 
 @main
 struct PrioritiserApp: App {
     @State private var model: AppModel
+    @State private var capture: CaptureController
 
     init() {
         // Open (and migrate/seed) the on-disk store. If it can't be opened we
@@ -19,13 +21,17 @@ struct PrioritiserApp: App {
                 .appendingPathComponent("prioritiser-fallback.sqlite")
             store = (try? TaskStore(url: fallback))!
         }
-        _model = State(initialValue: AppModel(store: store))
+        let model = AppModel(store: store)
+        _model = State(initialValue: model)
+        // Registers the global capture hotkey and owns the floating capture panel.
+        _capture = State(initialValue: CaptureController(model: model))
     }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(model)
+                .environment(capture)
                 .frame(minWidth: 900, minHeight: 560)
         }
         .windowToolbarStyle(.unified)
@@ -40,9 +46,18 @@ struct PrioritiserApp: App {
             }
         }
 
+        // Menu-bar item: always-available capture + the current shortcut.
+        MenuBarExtra("Prioritiser", systemImage: "checklist") {
+            Button("Quick Capture  (\(capture.shortcut.displayString))") { capture.showCapture() }
+            Divider()
+            Button("Open Prioritiser") { NSApp.activate(ignoringOtherApps: true) }
+            Button("Quit Prioritiser") { NSApp.terminate(nil) }
+        }
+
         // Settings (⌘,) mirrors the toolbar Tweaks popover.
         Settings {
             TweaksView()
+                .environment(capture)
                 .padding(.vertical, 8)
         }
     }

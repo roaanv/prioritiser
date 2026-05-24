@@ -5,6 +5,17 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — task deletion (single + multi-select)
+- Tasks can now be deleted: **right-click** a row for a **Delete** item, or press
+  **⌘⌫** while the list is focused. Deleting two or more tasks asks for confirmation
+  first; a single delete is immediate. A bare Backspace never deletes.
+- **Multi-select** in the task list: ⌘-click toggles a row in/out of the selection,
+  ⇧-click selects a contiguous range. The row highlight reflects the whole selection,
+  while the primary (last-clicked) task still drives the detail pane. After a delete,
+  the primary moves to a surviving neighbor.
+- Deletion is a hard delete that also removes the task's activity history (no orphaned
+  rows in the `activity` table). Covered by AppModel tests (**61 tests** total).
+
 ### Removed — placeholder user footer
 - Dropped the hardcoded "Alex" user chip from the bottom of the sidebar (leftover
   prototype chrome). Prioritiser is a single-user app, so there's no account to show.

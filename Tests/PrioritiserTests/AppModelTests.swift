@@ -174,6 +174,97 @@ struct AppModelTests {
         let folder = try #require(model.folders.first { $0.nameSlug == "newproj" })
         #expect(model.tasks.first { $0.title == "Plan the thing" }?.folderId == folder.id)
     }
+
+    // MARK: - Deletion
+
+    @Test func deleteTaskRemovesItFromMemoryAndStore() throws {
+        let store = try TaskStore(url: tempDBURL(), clock: TaskClock(now: referenceDate))
+        let model = AppModel(store: store, clock: TaskClock(now: referenceDate), defaults: throwawayDefaults())
+        #expect(model.tasks.contains { $0.id == "t6" })
+        model.deleteTasks(["t6"])
+        #expect(model.tasks.contains { $0.id == "t6" } == false)
+        #expect(store.loadTasks().contains { $0.id == "t6" } == false) // gone from disk too
+    }
+
+    @Test func deleteTaskAlsoRemovesItsActivity() throws {
+        let store = try TaskStore(url: tempDBURL(), clock: TaskClock(now: referenceDate))
+        let model = AppModel(store: store, clock: TaskClock(now: referenceDate), defaults: throwawayDefaults())
+        let task = try #require(model.tasks.first { $0.id == "t6" })
+        model.toggleDone(task) // logs a .completed activity event
+        #expect(!store.loadActivity(taskId: "t6").isEmpty)
+        model.deleteTasks(["t6"])
+        #expect(store.loadActivity(taskId: "t6").isEmpty) // no orphaned activity rows
+    }
+
+    @Test func deleteMovesPrimarySelectionToNeighbor() throws {
+        let model = try makeModel()
+        model.selection = .view(.all)
+        let order = model.visibleTasks.map(\.id)
+        try #require(order.count >= 3)
+        model.selectOnly(order[1])
+        model.deleteTasks([order[1]])
+        // The survivor that takes the deleted row's slot becomes primary.
+        #expect(model.selectedTaskID == order[2])
+        #expect(model.selectedTaskIDs.contains(order[2]))
+    }
+
+    @Test func requestDeletionConfirmsOnlyForMultiple() throws {
+        let model = try makeModel()
+        model.selection = .view(.all)
+        let order = model.visibleTasks.map(\.id)
+        try #require(order.count >= 3)
+
+        // Two tasks → confirmation pending; nothing deleted yet.
+        let pair = Set([order[0], order[1]])
+        model.requestDeletion(of: pair)
+        #expect(model.pendingDeletion == pair)
+        #expect(pair.allSatisfy { id in model.tasks.contains { $0.id == id } })
+        model.confirmPendingDeletion()
+        #expect(model.pendingDeletion == nil)
+        #expect(pair.allSatisfy { id in !model.tasks.contains { $0.id == id } })
+
+        // One task → deleted immediately, no confirmation.
+        let single = order[2]
+        model.requestDeletion(of: [single])
+        #expect(model.pendingDeletion == nil)
+        #expect(model.tasks.contains { $0.id == single } == false)
+    }
+
+    @Test func toggleAndRangeSelection() throws {
+        let model = try makeModel()
+        model.selection = .view(.all)
+        let order = model.visibleTasks.map(\.id)
+        try #require(order.count >= 3)
+
+        model.selectOnly(order[0])
+        #expect(model.selectedTaskIDs == Set([order[0]]))
+
+        model.toggleInSelection(order[2])
+        #expect(model.selectedTaskIDs == Set([order[0], order[2]]))
+        #expect(model.selectedTaskID == order[2]) // primary follows the add
+
+        model.toggleInSelection(order[2]) // remove it again
+        #expect(model.selectedTaskIDs == Set([order[0]]))
+
+        model.selectOnly(order[0])
+        model.extendSelection(to: order[2]) // ⇧-click range
+        #expect(model.selectedTaskIDs == Set([order[0], order[1], order[2]]))
+        #expect(model.selectedTaskID == order[2])
+    }
+
+    @Test func deletingFromContextMenuTargetsSelectionOrRow() throws {
+        let model = try makeModel()
+        model.selection = .view(.all)
+        let order = model.visibleTasks.map(\.id)
+        try #require(order.count >= 3)
+
+        // Right-clicking a row outside the selection targets just that row.
+        model.selectOnly(order[0])
+        model.requestDeletionFromContextMenu(order[2])
+        #expect(model.pendingDeletion == nil) // single → immediate
+        #expect(model.tasks.contains { $0.id == order[2] } == false)
+        #expect(model.selectedTaskIDs.contains(order[2]) == false)
+    }
 }
 
 /// An isolated UserDefaults so tests don't read/write the app's real preferences.

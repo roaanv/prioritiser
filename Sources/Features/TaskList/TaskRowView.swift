@@ -8,6 +8,7 @@
 //   • heat  — every row is tinted by score intensity.
 
 import SwiftUI
+import AppKit
 
 struct TaskRowView: View {
     @Environment(AppModel.self) private var model
@@ -18,7 +19,7 @@ struct TaskRowView: View {
     var vizMode: PriorityVizMode = .cards
 
     private var score: Int { model.score(for: task) }
-    private var isSelected: Bool { model.selectedTaskID == task.id }
+    private var isSelected: Bool { model.selectedTaskIDs.contains(task.id) }
 
     private var isCard: Bool { vizMode == .cards && rank != nil }
     private var isTopCard: Bool { isCard && rank == 1 }
@@ -37,7 +38,7 @@ struct TaskRowView: View {
                 rightColumn
             }
             .contentShape(Rectangle())
-            .onTapGesture { model.selectedTaskID = task.id }
+            .onTapGesture { handleClick() }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(accessibilityLabel)
             .accessibilityAddTraits(.isButton)
@@ -49,6 +50,38 @@ struct TaskRowView: View {
         .background(rowBackground)
         .overlay(rowBorder)
         .overlay(alignment: .bottom) { if showBar { scoreBar.accessibilityHidden(true) } }
+        .contextMenu { deleteMenu }
+    }
+
+    /// A click selects per the held modifiers: ⌘ toggles this row in/out of the
+    /// selection, ⇧ extends the range from the primary, a plain click selects only it.
+    private func handleClick() {
+        // Selecting in the list moves keyboard focus off any text editor (e.g. the
+        // detail Notes field), so ⌘⌫ targets the list selection rather than no-opping
+        // because a text view is first responder.
+        if let window = NSApp.keyWindow, window.firstResponder is NSText {
+            window.makeFirstResponder(nil)
+        }
+        let modifiers = NSEvent.modifierFlags
+        if modifiers.contains(.command) {
+            model.toggleInSelection(task.id)
+        } else if modifiers.contains(.shift) {
+            model.extendSelection(to: task.id)
+        } else {
+            model.selectOnly(task.id)
+        }
+    }
+
+    /// Right-click Delete. Reads "Delete N Tasks" when this row is part of a
+    /// multi-selection, otherwise "Delete Task".
+    @ViewBuilder
+    private var deleteMenu: some View {
+        let count = model.selectedTaskIDs.contains(task.id) ? model.selectedTaskIDs.count : 1
+        Button(role: .destructive) {
+            model.requestDeletionFromContextMenu(task.id)
+        } label: {
+            Label(count > 1 ? "Delete \(count) Tasks" : "Delete Task", systemImage: "trash")
+        }
     }
 
     /// Spoken description for VoiceOver, e.g. "Ship beta, Prioritiser, due Tomorrow,

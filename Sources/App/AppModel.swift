@@ -22,6 +22,11 @@ final class AppModel {
     var selectedTaskID: String? {
         didSet { defaults.set(selectedTaskID, forKey: Keys.selectedTask) }
     }
+    /// Multi-selection for bulk actions (delete). `selectedTaskID` is the primary /
+    /// inspected task; this set always contains it when non-empty. Not persisted.
+    var selectedTaskIDs: Set<String> = []
+    /// Non-nil while a multi-delete confirmation is showing — the ids awaiting it.
+    var pendingDeletion: Set<String>?
     var expandedFolders: Set<String> {
         didSet { defaults.set(Array(expandedFolders), forKey: Keys.expanded) }
     }
@@ -86,6 +91,7 @@ final class AppModel {
         } else {
             self.selectedTaskID = loadedTasks.first(where: { $0.id == "t6" })?.id ?? loadedTasks.first?.id
         }
+        self.selectedTaskIDs = selectedTaskID.map { [$0] } ?? []
 
         wakeDueSnoozedTasks()
     }
@@ -162,6 +168,88 @@ final class AppModel {
         PriorityScorer.score(for: task, weights: weights, clock: clock)
     }
 
+    // MARK: - Task selection
+
+    /// Select a single task (plain click): it becomes the primary + sole selection.
+    func selectOnly(_ id: String) {
+        selectedTaskID = id
+        selectedTaskIDs = [id]
+    }
+
+    /// Toggle a task in/out of the multi-selection (⌘-click).
+    func toggleInSelection(_ id: String) {
+        if selectedTaskIDs.contains(id) {
+            selectedTaskIDs.remove(id)
+            if selectedTaskID == id { selectedTaskID = selectedTaskIDs.first }
+        } else {
+            selectedTaskIDs.insert(id)
+            selectedTaskID = id
+        }
+    }
+
+    /// Extend the selection to a contiguous range from the primary to `id`, over the
+    /// current visible order (⇧-click). With no primary anchor, selects just `id`.
+    func extendSelection(to id: String) {
+        let order = visibleTasks.map(\.id)
+        guard let anchor = selectedTaskID,
+              let a = order.firstIndex(of: anchor),
+              let b = order.firstIndex(of: id) else { selectOnly(id); return }
+        let range = a <= b ? a...b : b...a
+        selectedTaskIDs = Set(order[range])
+        selectedTaskID = id
+    }
+
+    // MARK: - Task deletion
+
+    /// Route a delete request: a single task is removed immediately; deleting two or
+    /// more raises a confirmation (see `pendingDeletion` / `confirmPendingDeletion`).
+    func requestDeletion(of ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        if ids.count > 1 { pendingDeletion = ids } else { deleteTasks(ids) }
+    }
+
+    /// Delete from the row context menu: act on the whole multi-selection if the
+    /// clicked row belongs to it, otherwise just that row (selecting it first).
+    func requestDeletionFromContextMenu(_ id: String) {
+        if selectedTaskIDs.contains(id) && selectedTaskIDs.count > 1 {
+            requestDeletion(of: selectedTaskIDs)
+        } else {
+            selectOnly(id)
+            requestDeletion(of: [id])
+        }
+    }
+
+    /// Confirm (and clear) a pending multi-delete; a no-op if none is pending.
+    func confirmPendingDeletion() {
+        if let ids = pendingDeletion { deleteTasks(ids) }
+        pendingDeletion = nil
+    }
+
+    /// Hard-delete the given tasks (and their activity) from the store and memory,
+    /// then move the primary selection to a surviving neighbor of the deleted rows.
+    func deleteTasks(_ ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        let order = visibleTasks.map(\.id)
+        let primaryDeleted = selectedTaskID.map { ids.contains($0) } ?? true
+        let anchorIndex = order.firstIndex { ids.contains($0) }
+
+        for id in ids { store.deleteTask(id: id) }
+        tasks.removeAll { ids.contains($0.id) }
+        selectedTaskIDs.subtract(ids)
+
+        guard primaryDeleted else { return }
+        let survivors = order.filter { !ids.contains($0) }
+        if survivors.isEmpty {
+            selectedTaskID = nil
+        } else if let anchorIndex {
+            let before = order[..<anchorIndex].filter { !ids.contains($0) }.count
+            selectedTaskID = survivors[min(before, survivors.count - 1)]
+        } else {
+            selectedTaskID = survivors.first
+        }
+        if let primary = selectedTaskID { selectedTaskIDs.insert(primary) }
+    }
+
     // MARK: - Mutations
 
     /// Create a task from parsed quick-add input.
@@ -182,7 +270,7 @@ final class AppModel {
         store.insert(task, sortOrder: order)
         store.appendActivity(ActivityEvent(taskId: task.id, kind: .created, timestamp: task.createdAt))
         tasks.insert(task, at: 0)
-        selectedTaskID = task.id
+        selectOnly(task.id)
     }
 
     /// Persist an edited task, reflect it in memory, and log notable changes.

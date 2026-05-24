@@ -182,11 +182,18 @@ final class TaskStore {
         return events
     }
 
+    /// Hard-delete a task and its activity history (no orphaned activity rows).
     func deleteTask(id: String) {
-        guard let stmt = try? db.prepare("DELETE FROM tasks WHERE id = ?1;") else { return }
-        defer { stmt.finalize() }
-        stmt.bind(1, id)
-        try? stmt.run()
+        if let stmt = try? db.prepare("DELETE FROM tasks WHERE id = ?1;") {
+            defer { stmt.finalize() }
+            stmt.bind(1, id)
+            try? stmt.run()
+        }
+        if let stmt = try? db.prepare("DELETE FROM activity WHERE task_id = ?1;") {
+            defer { stmt.finalize() }
+            stmt.bind(1, id)
+            try? stmt.run()
+        }
     }
 
     /// Insert a folder (or replace one with the same id).

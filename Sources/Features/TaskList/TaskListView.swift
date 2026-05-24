@@ -6,6 +6,7 @@
 // In All Tasks with manual sort and no filters, rows can be dragged to reorder.
 
 import SwiftUI
+import AppKit
 
 struct TaskListView: View {
     @Environment(AppModel.self) private var model
@@ -24,6 +25,36 @@ struct TaskListView: View {
             footer
         }
         .background(Color(nsColor: .textBackgroundColor))
+        .background { deleteShortcut }
+        .alert("Delete tasks?", isPresented: deletionAlertBinding, presenting: model.pendingDeletion) { _ in
+            Button("Delete", role: .destructive) { model.confirmPendingDeletion() }
+            Button("Cancel", role: .cancel) { model.pendingDeletion = nil }
+        } message: { ids in
+            Text("Permanently delete \(ids.count) tasks? This can’t be undone.")
+        }
+    }
+
+    /// ⌘⌫ deletes the current selection. A hidden command button (not `.onKeyPress`)
+    /// so the ⌘-modified key is caught via key-equivalent dispatch rather than beeping.
+    private var deleteShortcut: some View {
+        Button(action: deleteSelectionViaShortcut) { EmptyView() }
+            .keyboardShortcut(.delete, modifiers: .command)
+            .disabled(model.selectedTaskIDs.isEmpty)
+            .opacity(0)
+            .accessibilityHidden(true)
+    }
+
+    /// Skip deletion while a text field/editor is first responder, so ⌘⌫ never fires
+    /// mid-edit (notes, quick-add, inline rename) — it just no-ops there.
+    private func deleteSelectionViaShortcut() {
+        if let responder = NSApp.keyWindow?.firstResponder, responder is NSText { return }
+        model.requestDeletion(of: model.selectedTaskIDs)
+    }
+
+    /// Drives the multi-delete confirmation alert from `model.pendingDeletion`.
+    private var deletionAlertBinding: Binding<Bool> {
+        Binding(get: { model.pendingDeletion != nil },
+                set: { presented in if !presented { model.pendingDeletion = nil } })
     }
 
     // MARK: - Display pipeline

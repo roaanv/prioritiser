@@ -184,6 +184,14 @@ gh-secrets: ## Push release secrets from the macOS Keychain to the GitHub repo
 	fi
 	@./scripts/set-gh-release-secrets.sh
 
+.PHONY: release-patch
+release-patch: ## Bump patch MARKETING_VERSION, tag, and push (triggers a release)
+	@./scripts/bump-release.sh patch
+
+.PHONY: release-minor
+release-minor: ## Bump minor MARKETING_VERSION, tag, and push (triggers a release)
+	@./scripts/bump-release.sh minor
+
 .PHONY: icon
 icon: ## Regenerate the app icon asset set from tools/make_icon.swift
 	@ICONSET="Sources/Resources/Assets.xcassets/AppIcon.appiconset"; \

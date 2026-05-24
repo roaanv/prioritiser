@@ -5,6 +5,13 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — one-step release bump targets
+- `make release-patch` / `make release-minor` bump `MARKETING_VERSION` in
+  `project.yml`, commit (`release: vX.Y.Z`), tag, and push from `main` — triggering
+  the release workflow. They guard against a dirty tree, a non-`main` branch, and an
+  existing tag, and push the branch + tag atomically. Logic lives in
+  `scripts/bump-release.sh`.
+
 ## [0.1.0] - 2026-05-24
 
 First signed + notarized public release — a universal (arm64 + x86_64) `.dmg` and

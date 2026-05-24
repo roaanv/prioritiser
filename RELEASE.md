@@ -55,6 +55,21 @@ repo to already exist on GitHub.
 
 ## Cutting a release
 
+**One step** — bump the version, commit, tag, and push in a single command:
+
+```sh
+make release-patch   # 0.1.0 -> 0.1.1
+make release-minor   # 0.1.0 -> 0.2.0
+```
+
+Each rewrites `MARKETING_VERSION` in `project.yml`, commits it as `release: vX.Y.Z`,
+tags, and pushes — which triggers the workflow. They refuse unless you're on `main`
+with a clean working tree and the target tag doesn't already exist
+(see [`scripts/bump-release.sh`](scripts/bump-release.sh)). Move any `[Unreleased]`
+changelog notes under the new version heading first.
+
+**By hand**, instead:
+
 1. Bump `MARKETING_VERSION` in [`project.yml`](project.yml) (e.g. `0.1.0` → `0.2.0`).
 2. Commit on `main`.
 3. Tag and push:

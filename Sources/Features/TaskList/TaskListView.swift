@@ -51,11 +51,17 @@ struct TaskListView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(alignment: .bottom, spacing: 16) {
+        @Bindable var model = model
+        return HStack(alignment: .bottom, spacing: 16) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(heading.title)
-                    .appFont(22, weight: .semibold, relativeTo: .title)
-                    .foregroundStyle(.primary)
+                HStack(spacing: 8) {
+                    Text(heading.title)
+                        .appFont(22, weight: .semibold, relativeTo: .title)
+                        .foregroundStyle(.primary)
+                    if let quadrant = model.quadrantFilter {
+                        quadrantChip(quadrant)
+                    }
+                }
                 if let sub = heading.subtitle {
                     Text(sub)
                         .appFont(12.5)
@@ -63,15 +69,24 @@ struct TaskListView: View {
                 }
             }
             Spacer()
-            headerTools
+            headerTools(include: $model.includeSubprojects)
         }
         .padding(.horizontal, 28)
         .padding(.top, 22)
         .padding(.bottom, 14)
     }
 
-    private var headerTools: some View {
+    private func headerTools(include: Binding<Bool>) -> some View {
         HStack(spacing: 4) {
+            if folderHasChildren {
+                Toggle(isOn: include) {
+                    Label("Subprojects", systemImage: "list.bullet.indent")
+                }
+                .toggleStyle(.button)
+                .controlSize(.small)
+                .help("Include tasks from sub-projects")
+                Divider().frame(height: 16).padding(.horizontal, 4)
+            }
             ForEach(TaskViewMode.allCases) { mode in
                 Button { layout = mode } label: {
                     Label(mode.label, systemImage: mode.systemImage)
@@ -88,6 +103,27 @@ struct TaskListView: View {
             sortMenu
             filterMenu
         }
+    }
+
+    private func quadrantChip(_ quadrant: EisenhowerQuadrant) -> some View {
+        Button { model.quadrantFilter = nil } label: {
+            HStack(spacing: 4) {
+                Text(quadrant.title).appFont(11, weight: .medium)
+                Image(systemName: "xmark.circle.fill").font(.system(size: 10))
+            }
+            .foregroundStyle(Color.accentColor)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(Color.accentColor.opacity(0.12), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Clear quadrant filter")
+    }
+
+    private var folderHasChildren: Bool {
+        if case .folder(let id) = model.selection {
+            return model.folders.contains { $0.parentId == id }
+        }
+        return false
     }
 
     private var sortMenu: some View {

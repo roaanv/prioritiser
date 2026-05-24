@@ -5,6 +5,29 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — project priority matrix (Eisenhower 2×2)
+- A "Priority Matrix" panel pinned below the detail pane shows per-quadrant task
+  counts for the sidebar-selected project. Axes map onto our data: **Important** =
+  high impact, **Urgent** = overdue or due within 2 days (no due date = not urgent).
+  Quadrants: Do Now / Plan / Quick Decisions / Backlog. Each cell's fill is a
+  count-driven **temperature heat** (OKLCH cool-blue → warm-red, relative to the
+  busiest quadrant; empty = no tint); selection is conveyed solely by the accent
+  ring, so heat and selection never use the same signal. Counts render in primary.
+- A **Sub-projects** toggle (shown only when the folder has children) scopes between
+  this folder only and the whole subtree.
+- The matrix also shows for the **whole-set smart views** — Top Priorities, All Tasks,
+  Inbox — and clicking a quadrant filters those too. It stays hidden for the
+  axis-defined views (Today / Overdue / Next 7 / Quick Wins), where a 2×2 would be
+  degenerate or redundant (`SmartView.supportsMatrix`).
+- Pure, tested `Eisenhower` classifier + `TaskFilter.directTasks`.
+- **Click a quadrant to filter the task list** to it (click again, or the heading
+  chip's ✕, to clear; changing selection clears it too).
+- The Sub-projects scope is one shared `includeSubprojects` setting driving **both**
+  the list and the matrix, so a quadrant's count always matches the filtered list. Its
+  single toggle lives in the **task-list header** (shown when a parent folder is
+  selected); the matrix just reflects the scope ("incl. sub-projects" / "this project").
+  (53 tests total.)
+
 ### Added — create-on-commit projects + folder re-parenting
 - **Unknown `#project` prompts to create.** When a task is committed (Enter), if its
   `#slug` doesn't match an existing folder, a confirmation asks "Create project …?".

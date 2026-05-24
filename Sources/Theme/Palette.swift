@@ -73,6 +73,18 @@ enum Palette {
         }
     }
 
+    /// Heatmap tint for a 0...1 intensity: cool blue (low) → warm red (high),
+    /// built in OKLCH so the ramp stays an even, light tint. Callers pass a positive
+    /// fraction; a zero-count cell should use no tint (clear) rather than the cold end.
+    static func heat(_ fraction: Double, scheme: ColorScheme) -> Color {
+        let t = min(max(fraction, 0), 1)
+        let hue = 250 - t * 225 // 250° (blue) → 25° (red), via the thermal path
+        switch scheme {
+        case .dark: return OKLCH(0.34, 0.08, hue).color
+        default: return OKLCH(0.93, 0.06, hue).color
+        }
+    }
+
     /// Foreground color for an overdue due-date label in the detail pane.
     static func overdueText(scheme: ColorScheme) -> Color {
         scheme == .dark ? OKLCH(0.75, 0.15, 28).color : OKLCH(0.55, 0.18, 28).color

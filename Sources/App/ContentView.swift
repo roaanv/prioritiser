@@ -23,8 +23,11 @@ struct ContentView: View {
             TaskListView()
                 .navigationSplitViewColumnWidth(min: 420, ideal: 560)
         } detail: {
-            DetailView()
-                .navigationSplitViewColumnWidth(min: 300, ideal: 340, max: 440)
+            VStack(spacing: 0) {
+                DetailView()
+                ProjectMatrixView() // pinned below; shows for folder selections only
+            }
+            .navigationSplitViewColumnWidth(min: 300, ideal: 340, max: 440)
         }
         .navigationSplitViewStyle(.balanced)
         .tint(accent.color)

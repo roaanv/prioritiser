@@ -14,7 +14,10 @@ final class AppModel {
 
     // Sidebar state persists across launches (see didSet observers).
     var selection: Selection {
-        didSet { defaults.set(selection.persistedString, forKey: Keys.selection) }
+        didSet {
+            defaults.set(selection.persistedString, forKey: Keys.selection)
+            quadrantFilter = nil // a quadrant filter is scoped to one project view
+        }
     }
     var selectedTaskID: String? {
         didSet { defaults.set(selectedTaskID, forKey: Keys.selectedTask) }
@@ -28,6 +31,12 @@ final class AppModel {
     var searchQuery = ""
     /// Bumped when ⌘F is pressed; the sidebar search field focuses on change.
     var focusSearchToken = 0
+    /// Shared folder scope: include descendant projects in the list AND the matrix.
+    var includeSubprojects: Bool {
+        didSet { defaults.set(includeSubprojects, forKey: Keys.includeSubprojects) }
+    }
+    /// When set (via the matrix), the folder list is narrowed to this quadrant.
+    var quadrantFilter: EisenhowerQuadrant?
 
     let clock: TaskClock
     let weights = PriorityWeights.default
@@ -39,6 +48,7 @@ final class AppModel {
         static let selection = "ui.selection"
         static let selectedTask = "ui.selectedTaskID"
         static let expanded = "ui.expandedFolders"
+        static let includeSubprojects = "ui.includeSubprojects"
     }
 
     init(store: TaskStore, clock: TaskClock = TaskClock(), defaults: UserDefaults = .standard) {
@@ -49,6 +59,9 @@ final class AppModel {
         self.defaults = defaults
         self.folders = loadedFolders
         self.tasks = loadedTasks
+        // Default to showing sub-projects (the list's pre-existing behavior).
+        self.includeSubprojects = defaults.object(forKey: Keys.includeSubprojects) as? Bool ?? true
+        self.quadrantFilter = nil
 
         // Restore expanded folders (default: top-level folders open).
         if let saved = defaults.array(forKey: Keys.expanded) as? [String] {
@@ -91,14 +104,43 @@ final class AppModel {
         return tasks.first { $0.id == id }
     }
 
-    /// The ordered task set for the current selection, narrowed by the search query.
+    /// Live tasks for a folder at the current scope (this folder, or + descendants).
+    /// Used by both the task list and the project matrix so their counts agree.
+    func folderScopedTasks(_ folderId: String) -> [TaskItem] {
+        includeSubprojects
+            ? TaskFilter.tasks(inFolder: folderId, tasks: tasks, folders: folders)
+            : TaskFilter.directTasks(inFolder: folderId, tasks: tasks)
+    }
+
+    /// The task set the project matrix summarizes for the current selection, or nil
+    /// when the matrix doesn't apply (Today / Overdue / Next 7 / Quick Wins). This is
+    /// the same base the list uses, so quadrant counts equal the filtered list size.
+    var matrixBaseTasks: [TaskItem]? {
+        switch selection {
+        case .folder(let id):
+            return folderScopedTasks(id)
+        case .view(let view):
+            return view.supportsMatrix
+                ? TaskFilter.tasks(for: view, in: tasks, weights: weights, clock: clock)
+                : nil
+        }
+    }
+
+    /// The ordered task set for the current selection, narrowed by the quadrant
+    /// filter (where the matrix applies) and the search query.
     var visibleTasks: [TaskItem] {
-        let base: [TaskItem]
+        var base: [TaskItem]
         switch selection {
         case .view(let view):
             base = TaskFilter.tasks(for: view, in: tasks, weights: weights, clock: clock)
+            if let quadrant = quadrantFilter, view.supportsMatrix {
+                base = base.filter { Eisenhower.quadrant(for: $0, clock: clock) == quadrant }
+            }
         case .folder(let id):
-            base = TaskFilter.tasks(inFolder: id, tasks: tasks, folders: folders)
+            base = folderScopedTasks(id)
+            if let quadrant = quadrantFilter {
+                base = base.filter { Eisenhower.quadrant(for: $0, clock: clock) == quadrant }
+            }
         }
         let query = searchQuery.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { return base }
@@ -109,6 +151,10 @@ final class AppModel {
     }
 
     var isSearching: Bool { !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    func toggleQuadrantFilter(_ quadrant: EisenhowerQuadrant) {
+        quadrantFilter = (quadrantFilter == quadrant) ? nil : quadrant
+    }
 
     func folder(id: String) -> Folder? { folders.first { $0.id == id } }
 

@@ -68,4 +68,15 @@ enum SmartView: String, CaseIterable, Identifiable {
 
     /// Whether this view's badge should render in the "alert" (overdue) color.
     var isAlert: Bool { self == .overdue }
+
+    /// Whether the project priority matrix is meaningful for this view. Shown for
+    /// whole-set views; hidden for views defined by a matrix axis — Today/Overdue
+    /// (due-date) would have two structurally-empty quadrants, and Next 7 / Quick
+    /// Wins already filter on due/effort, so the matrix would just re-slice them.
+    var supportsMatrix: Bool {
+        switch self {
+        case .top, .all, .inbox: return true
+        case .today, .week, .overdue, .quickWin: return false
+        }
+    }
 }

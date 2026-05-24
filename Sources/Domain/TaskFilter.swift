@@ -47,6 +47,11 @@ enum TaskFilter {
         live(tasks).filter { FolderTree.isDescendant($0.folderId, ofOrEqual: folderId, in: folders) }
     }
 
+    /// Live tasks filed directly in `folderId` (excludes descendant folders).
+    static func directTasks(inFolder folderId: String, tasks: [TaskItem]) -> [TaskItem] {
+        live(tasks).filter { $0.folderId == folderId }
+    }
+
     /// Sidebar badge count for a smart view. "Top" caps at 5 (the Top-5 band);
     /// every other view reports the size of its filtered set.
     static func badgeCount(

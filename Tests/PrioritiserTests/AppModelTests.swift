@@ -113,6 +113,60 @@ struct AppModelTests {
         #expect(roots.firstIndex(of: "prioritiser")! < roots.firstIndex(of: "reading")!)
     }
 
+    @Test func quadrantFilterNarrowsListToMatchCount() throws {
+        let model = try makeModel()
+        model.selection = .folder("work")
+        model.includeSubprojects = true
+        let doNow = Eisenhower.counts(for: model.folderScopedTasks("work"), clock: model.clock)[.doNow] ?? 0
+        model.toggleQuadrantFilter(.doNow)
+        // The filtered list size equals the matrix count (shared scope).
+        #expect(model.visibleTasks.count == doNow)
+        #expect(model.visibleTasks.allSatisfy { Eisenhower.quadrant(for: $0, clock: model.clock) == .doNow })
+        model.toggleQuadrantFilter(.doNow) // toggling again clears
+        #expect(model.quadrantFilter == nil)
+    }
+
+    @Test func matrixAppliesToWholeSetViewsButNotAxisViews() throws {
+        let model = try makeModel()
+        for view in [SmartView.top, .all, .inbox] {
+            model.selection = .view(view)
+            #expect(model.matrixBaseTasks != nil)
+        }
+        for view in [SmartView.today, .week, .overdue, .quickWin] {
+            model.selection = .view(view)
+            #expect(model.matrixBaseTasks == nil)
+        }
+        model.selection = .folder("work")
+        #expect(model.matrixBaseTasks != nil)
+    }
+
+    @Test func quadrantFilterAppliesToSupportingView() throws {
+        let model = try makeModel()
+        model.selection = .view(.top)
+        let doNow = Eisenhower.counts(for: model.matrixBaseTasks ?? [], clock: model.clock)[.doNow] ?? 0
+        model.toggleQuadrantFilter(.doNow)
+        #expect(model.visibleTasks.count == doNow)
+        #expect(model.visibleTasks.allSatisfy { Eisenhower.quadrant(for: $0, clock: model.clock) == .doNow })
+    }
+
+    @Test func subprojectScopeChangesFolderList() throws {
+        let model = try makeModel()
+        model.selection = .folder("work")
+        model.includeSubprojects = true
+        let withSubs = model.visibleTasks.count
+        model.includeSubprojects = false
+        #expect(withSubs > model.visibleTasks.count)
+    }
+
+    @Test func changingSelectionClearsQuadrantFilter() throws {
+        let model = try makeModel()
+        model.selection = .folder("work")
+        model.toggleQuadrantFilter(.doNow)
+        #expect(model.quadrantFilter != nil)
+        model.selection = .view(.all)
+        #expect(model.quadrantFilter == nil)
+    }
+
     @Test func createFolderAndTaskCreatesUnknownProject() throws {
         let model = try makeModel()
         #expect(model.knownFolder(forSlug: "newproj") == nil)

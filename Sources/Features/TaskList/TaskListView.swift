@@ -118,6 +118,11 @@ struct TaskListView: View {
         return false
     }
 
+    private var isCompletedView: Bool {
+        if case .view(.completed) = model.selection { return true }
+        return false
+    }
+
     /// Manual reordering is only unambiguous in All Tasks, manual sort, list layout,
     /// with no active filter or search.
     private var reorderable: Bool {
@@ -164,21 +169,25 @@ struct TaskListView: View {
                 .help("Include tasks from sub-projects")
                 Divider().frame(height: 16).padding(.horizontal, 4)
             }
-            ForEach(TaskViewMode.allCases) { mode in
-                Button { layout = mode } label: {
-                    Label(mode.label, systemImage: mode.systemImage)
-                        .font(.system(size: 12))
-                        .foregroundStyle(layout == mode ? .primary : .secondary)
-                        .padding(.horizontal, 9).padding(.vertical, 4)
-                        .background(layout == mode ? AnyShapeStyle(Color.primary.opacity(0.06)) : AnyShapeStyle(.clear),
-                                    in: RoundedRectangle(cornerRadius: 6))
+            // The Completed log ignores layout/sort/filter (it's grouped by day), so
+            // those controls are hidden there.
+            if !isCompletedView {
+                ForEach(TaskViewMode.allCases) { mode in
+                    Button { layout = mode } label: {
+                        Label(mode.label, systemImage: mode.systemImage)
+                            .font(.system(size: 12))
+                            .foregroundStyle(layout == mode ? .primary : .secondary)
+                            .padding(.horizontal, 9).padding(.vertical, 4)
+                            .background(layout == mode ? AnyShapeStyle(Color.primary.opacity(0.06)) : AnyShapeStyle(.clear),
+                                        in: RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(layout == mode ? [.isButton, .isSelected] : .isButton)
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(layout == mode ? [.isButton, .isSelected] : .isButton)
+                Divider().frame(height: 16).padding(.horizontal, 4)
+                sortMenu
+                filterMenu
             }
-            Divider().frame(height: 16).padding(.horizontal, 4)
-            sortMenu
-            filterMenu
         }
     }
 
@@ -237,7 +246,9 @@ struct TaskListView: View {
     private var taskScroll: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                if layout == .schedule {
+                if isCompletedView {
+                    completedContent
+                } else if layout == .schedule {
                     scheduleContent
                 } else if isTopView {
                     topContent
@@ -247,6 +258,44 @@ struct TaskListView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
+        }
+    }
+
+    /// Completed tasks grouped by the day they were finished, most recent first.
+    /// Tasks whose completion date couldn't be determined fall into a trailing group.
+    @ViewBuilder
+    private var completedContent: some View {
+        let done = model.visibleTasks // TaskFilter.completed → done, newest-completed first
+        if done.isEmpty {
+            emptyView
+        } else {
+            let groups = completedGroups(done)
+            ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
+                band(label: group.label, trailing: "\(group.tasks.count)")
+                flatRows(group.tasks, vizMode: .cards, reorderable: false)
+            }
+        }
+    }
+
+    /// Bucket completed tasks by start-of-day of `completedAt`, preserving the
+    /// newest-first order (so the day groups come out descending).
+    private func completedGroups(_ tasks: [TaskItem]) -> [(label: String, tasks: [TaskItem])] {
+        var order: [Date] = []
+        var byDay: [Date: [TaskItem]] = [:]
+        for task in tasks {
+            let day = task.completedAt.map { model.clock.startOfDay($0) } ?? .distantPast
+            if byDay[day] == nil { order.append(day) }
+            byDay[day, default: []].append(task)
+        }
+        return order.map { (completedDayLabel($0), byDay[$0] ?? []) }
+    }
+
+    private func completedDayLabel(_ day: Date) -> String {
+        if day == .distantPast { return "Completion date unknown" }
+        switch model.clock.daysUntil(day) {
+        case 0: return "Today"
+        case -1: return "Yesterday"
+        default: return day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
         }
     }
 
@@ -348,7 +397,8 @@ struct TaskListView: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
-            let count = layout == .schedule || !isTopView ? displayTasks.count : topTasks.count
+            let count = isCompletedView ? model.visibleTasks.count
+                : (layout == .schedule || !isTopView ? displayTasks.count : topTasks.count)
             Text("\(count) \(count == 1 ? "task" : "tasks")")
             Text("·")
             Spacer()

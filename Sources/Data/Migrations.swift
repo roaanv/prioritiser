@@ -8,7 +8,7 @@ import Foundation
 
 enum Migrations {
     /// The schema version this build expects.
-    static let latestVersion = 2
+    static let latestVersion = 3
 
     /// Apply any pending migrations to bring `db` up to `latestVersion`.
     static func migrate(_ db: Database) throws {
@@ -23,6 +23,10 @@ enum Migrations {
             if version < 2 {
                 try v2(db)
                 version = 2
+            }
+            if version < 3 {
+                try v3(db)
+                version = 3
             }
         }
         db.userVersion = latestVersion
@@ -77,6 +81,20 @@ enum Migrations {
 
         INSERT INTO activity (id, task_id, kind, detail, timestamp)
             SELECT 'created-' || id, id, 'created', NULL, created_at FROM tasks;
+        """)
+    }
+
+    /// v3 — record when a task was completed. Backfills `completed_at` for already-done
+    /// tasks from their most recent "completed" activity event, so the Completed view
+    /// has real dates after upgrading (tasks with no such event stay null).
+    private static func v3(_ db: Database) throws {
+        try db.execute("""
+        ALTER TABLE tasks ADD COLUMN completed_at REAL;
+
+        UPDATE tasks SET completed_at = (
+            SELECT MAX(timestamp) FROM activity
+            WHERE activity.task_id = tasks.id AND activity.kind = 'completed'
+        ) WHERE state = 'done';
         """)
     }
 }

@@ -317,6 +317,48 @@ struct AppModelTests {
         let reopened = AppModel(store: store, clock: TaskClock(now: referenceDate), defaults: defaults)
         #expect(reopened.isFocusMode == true) // remembered across restarts
     }
+
+    // MARK: - Completed view
+
+    @Test func completingSetsCompletedAtAndReopeningClearsIt() throws {
+        let model = try makeModel()
+        let task = try #require(model.tasks.first { $0.state != .done })
+        model.toggleDone(task)
+        let done = try #require(model.tasks.first { $0.id == task.id })
+        #expect(done.state == .done)
+        #expect(done.completedAt != nil)
+        model.toggleDone(done)
+        #expect(model.tasks.first { $0.id == task.id }?.completedAt == nil)
+    }
+
+    @Test func updateEnforcesCompletedAtInvariant() throws {
+        let model = try makeModel()
+        var task = try #require(model.tasks.first { $0.state != .done })
+        task.state = .done // e.g. via the detail-pane state control, not the checkbox
+        model.update(task)
+        #expect(model.tasks.first { $0.id == task.id }?.completedAt != nil)
+    }
+
+    @Test func completedViewListsDoneTasksMostRecentFirst() throws {
+        let model = try makeModel()
+        for id in model.tasks.prefix(2).map(\.id) {
+            if let task = model.tasks.first(where: { $0.id == id }) { model.toggleDone(task) }
+        }
+        model.selection = .view(.completed)
+        let completed = model.visibleTasks
+        #expect(completed.count >= 2)
+        #expect(completed.allSatisfy { $0.state == .done })
+        let times = completed.compactMap(\.completedAt)
+        #expect(times == times.sorted(by: >)) // newest completion first
+    }
+
+    @Test func completedAtPersistsToStore() throws {
+        let store = try TaskStore(url: tempDBURL(), clock: TaskClock(now: referenceDate))
+        let model = AppModel(store: store, clock: TaskClock(now: referenceDate), defaults: throwawayDefaults())
+        let task = try #require(model.tasks.first { $0.state != .done })
+        model.toggleDone(task)
+        #expect(store.loadTasks().first { $0.id == task.id }?.completedAt != nil) // round-trips the v3 column
+    }
 }
 
 /// An isolated UserDefaults so tests don't read/write the app's real preferences.

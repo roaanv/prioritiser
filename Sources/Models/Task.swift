@@ -19,6 +19,9 @@ struct TaskItem: Identifiable, Hashable, Codable {
     var notes: String?
     var snoozedUntil: Date?
     var createdAt: Date
+    /// When the task was last marked done (nil unless `state == .done`). Maintained as
+    /// an invariant by `AppModel.update`; powers the Completed view's day grouping.
+    var completedAt: Date?
 
     init(
         id: String = UUID().uuidString,
@@ -31,7 +34,8 @@ struct TaskItem: Identifiable, Hashable, Codable {
         state: TaskState = .open,
         notes: String? = nil,
         snoozedUntil: Date? = nil,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        completedAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -44,6 +48,7 @@ struct TaskItem: Identifiable, Hashable, Codable {
         self.notes = notes
         self.snoozedUntil = snoozedUntil
         self.createdAt = createdAt
+        self.completedAt = completedAt
     }
 
     var isDone: Bool { state == .done }

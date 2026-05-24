@@ -39,6 +39,10 @@ enum TaskFilter {
             // "All Tasks" includes snoozed (the place to find + un-snooze them);
             // only completed tasks are hidden.
             return tasks.filter { $0.state != .done }
+        case .completed:
+            // Done tasks, most recently completed first (nil completion dates last).
+            return tasks.filter { $0.state == .done }
+                .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
         }
     }
 
@@ -66,6 +70,7 @@ enum TaskFilter {
         weights: PriorityWeights = .default,
         clock: TaskClock = TaskClock()
     ) -> Int {
+        if view == .completed { return 0 } // a growing log doesn't need a count badge
         if view == .top { return min(5, live(tasks).count) }
         return self.tasks(for: view, in: tasks, weights: weights, clock: clock).count
     }

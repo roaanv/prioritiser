@@ -298,6 +298,15 @@ final class AppModel {
 
     /// Persist an edited task, reflect it in memory, and log notable changes.
     func update(_ task: TaskItem) {
+        var task = task
+        // Invariant: a done task carries a completion time; a non-done one doesn't. Set
+        // once when it first becomes done, so editing an already-done task keeps the time.
+        // Applies to every path (the checkbox and the detail-pane state control).
+        if task.state == .done {
+            if task.completedAt == nil { task.completedAt = clock.now }
+        } else {
+            task.completedAt = nil
+        }
         let previous = tasks.first { $0.id == task.id }
         store.update(task)
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {

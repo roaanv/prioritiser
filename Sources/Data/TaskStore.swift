@@ -54,7 +54,7 @@ final class TaskStore {
     func loadTasks() -> [TaskItem] {
         guard let stmt = try? db.prepare("""
             SELECT id, title, folder_id, due, effort_minutes, impact, priority,
-                   state, notes, snoozed_until, created_at
+                   state, notes, snoozed_until, created_at, completed_at
             FROM tasks ORDER BY sort_order ASC;
             """) else { return [] }
         defer { stmt.finalize() }
@@ -72,7 +72,8 @@ final class TaskStore {
                 state: TaskState(rawValue: stmt.text(7) ?? "open") ?? .open,
                 notes: stmt.text(8),
                 snoozedUntil: stmt.double(9).map { Date(timeIntervalSince1970: $0) },
-                createdAt: stmt.double(10).map { Date(timeIntervalSince1970: $0) } ?? Date()
+                createdAt: stmt.double(10).map { Date(timeIntervalSince1970: $0) } ?? Date(),
+                completedAt: stmt.double(11).map { Date(timeIntervalSince1970: $0) }
             ))
         }
         return tasks
@@ -86,8 +87,8 @@ final class TaskStore {
         guard let stmt = try? db.prepare("""
             INSERT OR REPLACE INTO tasks
               (id, title, folder_id, due, effort_minutes, impact, priority,
-               state, notes, snoozed_until, created_at, sort_order)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);
+               state, notes, snoozed_until, created_at, sort_order, completed_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13);
             """) else { return }
         defer { stmt.finalize() }
         stmt.bind(1, task.id)
@@ -102,6 +103,7 @@ final class TaskStore {
             .bind(10, task.snoozedUntil?.timeIntervalSince1970)
             .bind(11, task.createdAt.timeIntervalSince1970)
             .bind(12, sortOrder)
+            .bind(13, task.completedAt?.timeIntervalSince1970)
         try? stmt.run()
     }
 
@@ -111,7 +113,8 @@ final class TaskStore {
         guard let stmt = try? db.prepare("""
             UPDATE tasks SET
               title = ?2, folder_id = ?3, due = ?4, effort_minutes = ?5,
-              impact = ?6, priority = ?7, state = ?8, notes = ?9, snoozed_until = ?10
+              impact = ?6, priority = ?7, state = ?8, notes = ?9, snoozed_until = ?10,
+              completed_at = ?11
             WHERE id = ?1;
             """) else { return }
         defer { stmt.finalize() }
@@ -125,6 +128,7 @@ final class TaskStore {
             .bind(8, task.state.rawValue)
             .bind(9, task.notes)
             .bind(10, task.snoozedUntil?.timeIntervalSince1970)
+            .bind(11, task.completedAt?.timeIntervalSince1970)
         try? stmt.run()
     }
 

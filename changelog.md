@@ -5,6 +5,18 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — Completed view
+- A new **Completed** sidebar view lists done tasks **grouped by the day you completed
+  them** (Today / Yesterday / date), most recent first. Checking a task off files it here;
+  toggling its checkbox **reopens** it (and it leaves the list).
+- Tasks now store a **`completedAt`** timestamp (**migration v3**), set when a task becomes
+  done and cleared when reopened — enforced as an invariant in `AppModel.update`, so it's
+  correct whether you complete via the checkbox or the detail-pane state control. Existing
+  done tasks are **backfilled** from their `.completed` activity events, so historical
+  completion dates survive the upgrade.
+- `SmartView.completed` + `TaskFilter` completed set (no count badge); the view hides the
+  layout/sort/filter controls since it's a day-grouped log. (**78 tests**.)
+
 ### Added — `make install` (local install)
 - `make install` builds a Release app for this Mac's architecture (ad-hoc signed, so
   it launches locally without Gatekeeper friction) and copies it to `~/Applications` —

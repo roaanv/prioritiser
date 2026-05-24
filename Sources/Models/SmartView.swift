@@ -13,6 +13,7 @@ enum SmartView: String, CaseIterable, Identifiable {
     case quickWin = "quickwin"
     case inbox
     case all
+    case completed
 
     var id: String { rawValue }
 
@@ -26,6 +27,7 @@ enum SmartView: String, CaseIterable, Identifiable {
         case .quickWin: return "Quick Wins"
         case .inbox: return "Inbox"
         case .all: return "All Tasks"
+        case .completed: return "Completed"
         }
     }
 
@@ -39,6 +41,7 @@ enum SmartView: String, CaseIterable, Identifiable {
         case .quickWin: return "30 minutes or less with medium-plus impact."
         case .inbox: return "Tasks not yet filed."
         case .all: return "Every open task."
+        case .completed: return "Done, grouped by the day you completed them."
         }
     }
 
@@ -49,6 +52,7 @@ enum SmartView: String, CaseIterable, Identifiable {
         case .overdue: return "No overdue tasks. Stay sharp."
         case .quickWin: return "No quick wins waiting."
         case .inbox: return "Inbox is empty."
+        case .completed: return "No completed tasks yet. Check one off to see it here."
         default: return "Nothing here yet."
         }
     }
@@ -63,6 +67,7 @@ enum SmartView: String, CaseIterable, Identifiable {
         case .quickWin: return "bolt.fill"
         case .inbox: return "tray"
         case .all: return "list.bullet"
+        case .completed: return "checkmark.circle"
         }
     }
 
@@ -76,7 +81,7 @@ enum SmartView: String, CaseIterable, Identifiable {
     var supportsMatrix: Bool {
         switch self {
         case .top, .all, .inbox: return true
-        case .today, .week, .overdue, .quickWin: return false
+        case .today, .week, .overdue, .quickWin, .completed: return false
         }
     }
 }

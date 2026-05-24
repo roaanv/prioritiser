@@ -5,6 +5,12 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-05-24
+
+First signed + notarized public release — a universal (arm64 + x86_64) `.dmg` and
+`.zip`, published to `roaanv/prioritiser` and `roaanv/releases`. Everything below
+shipped in 0.1.0.
+
 ### Added — signed/notarized release pipeline (GitHub Actions)
 - A tag-driven (`v*`) workflow (`.github/workflows/release.yml`) runs the tests,
   then builds a **universal (arm64 + x86_64)** Release binary, **Developer ID**-signs
@@ -191,3 +197,6 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
   `t:1h` in `due:tomorrow t:1h`) — added a `(?!:)` lookahead on continuation words.
 - Weekday names now parse for all days ("saturday", "tuesday", …); the prototype
   only handled `abbrev` / `abbrev+"day"`, silently failing on most full names.
+
+[Unreleased]: https://github.com/roaanv/prioritiser/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/roaanv/prioritiser/releases/tag/v0.1.0

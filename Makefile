@@ -47,6 +47,20 @@ run: build ## Build then launch the app
 	@echo "Launching $(APP)..."
 	open "$(APP)"
 
+.PHONY: install
+install: $(PROJECT) ## Build a Release app (this Mac's arch) and copy it to ~/Applications
+	@echo "Building $(PRODUCT_NAME) (Release, this Mac's architecture)..."
+	set -o pipefail && xcodebuild build \
+		-project $(PROJECT) \
+		-scheme $(SCHEME) \
+		-configuration Release \
+		-derivedDataPath $(DERIVED) \
+		ONLY_ACTIVE_ARCH=YES $(PRETTY)
+	@mkdir -p "$$HOME/Applications"
+	@rm -rf "$$HOME/Applications/$(PRODUCT_NAME).app"
+	@cp -R "$(RELEASE_APP)" "$$HOME/Applications/"
+	@echo "Installed ~/Applications/$(PRODUCT_NAME).app — launch it from Spotlight or the Dock."
+
 .PHONY: test
 test: $(PROJECT) ## Run the unit test suite
 	xcodebuild test \

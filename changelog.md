@@ -5,6 +5,11 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — `make install` (local install)
+- `make install` builds a Release app for this Mac's architecture (ad-hoc signed, so
+  it launches locally without Gatekeeper friction) and copies it to `~/Applications` —
+  a fast way to use the latest build without the tagged GitHub release pipeline.
+
 ### Added — Focus ("Today") mode
 - A slimmed-down second operating mode showing only **today's and overdue** tasks as
   collapsible cards. Each card edits the **title** and **description** inline, lets you

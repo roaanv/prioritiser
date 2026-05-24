@@ -35,14 +35,29 @@ enum FolderTree {
         return path
     }
 
-    /// Resolve a `#folder` slug to an existing folder: first by id, then by a
-    /// space-stripped name match (e.g. "designreview" → "Design Review").
+    /// Folders matching an autocomplete query, prefix matches first then substring
+    /// matches, alphabetical within each group. An empty query returns the first few.
+    static func search(_ query: String, in folders: [Folder], limit: Int = 6) -> [Folder] {
+        let q = query.lowercased()
+        guard !q.isEmpty else { return Array(folders.prefix(limit)) }
+        let ranked = folders.compactMap { folder -> (folder: Folder, rank: Int)? in
+            let name = folder.name.lowercased(), id = folder.id.lowercased()
+            if name.hasPrefix(q) || id.hasPrefix(q) { return (folder, 0) }
+            if name.contains(q) || id.contains(q) { return (folder, 1) }
+            return nil
+        }
+        return ranked
+            .sorted { $0.rank != $1.rank ? $0.rank < $1.rank : $0.folder.name < $1.folder.name }
+            .prefix(limit)
+            .map(\.folder)
+    }
+
+    /// Resolve a `#folder` slug to an existing folder: first by id (so a literal
+    /// `#ops` still works), then by name slug (e.g. "operations" → "Operations").
     static func folder(forSlug slug: String, in folders: [Folder]) -> Folder? {
         let key = slug.lowercased()
         if let exact = folders.first(where: { $0.id.lowercased() == key }) { return exact }
-        return folders.first {
-            $0.name.lowercased().replacingOccurrences(of: " ", with: "") == key
-        }
+        return folders.first { $0.nameSlug == key }
     }
 
     /// True if `folderId` is `ancestorId` itself or a descendant of it.

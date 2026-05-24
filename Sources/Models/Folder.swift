@@ -18,4 +18,11 @@ struct Folder: Identifiable, Hashable, Codable {
 extension Folder {
     /// The `id` used for unfiled tasks captured without an explicit `#folder`.
     static let inboxID = "inbox"
+
+    /// A grammar-safe slug derived from the display name (lowercased, alphanumerics
+    /// only): "Operations" → "operations", "Design Review" → "designreview". Used by
+    /// `#tag` autocomplete completion and name-based resolution so they round-trip.
+    var nameSlug: String {
+        name.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
+    }
 }

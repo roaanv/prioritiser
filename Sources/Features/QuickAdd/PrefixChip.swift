@@ -6,6 +6,14 @@
 
 import SwiftUI
 
+/// Shared autocomplete logic: the folder suggestions for an in-progress `#tag`.
+enum QuickAddAutocomplete {
+    static func suggestions(for text: String, in folders: [Folder]) -> [Folder] {
+        guard let query = PrefixParser.activeHashtagQuery(in: text) else { return [] }
+        return FolderTree.search(query, in: folders)
+    }
+}
+
 struct PrefixChip: View {
     let token: PrefixToken
     let folders: [Folder]
@@ -56,6 +64,49 @@ struct PrefixChip: View {
         case .priority:
             return Palette.priority(scheme: scheme)
         }
+    }
+}
+
+/// Todoist-style folder autocomplete dropdown shown while typing a `#tag`.
+struct FolderSuggestionList: View {
+    let folders: [Folder]
+    let allFolders: [Folder]
+    let highlighted: Int
+    let onPick: (Folder) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(folders.enumerated()), id: \.element.id) { index, folder in
+                Button { onPick(folder) } label: {
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 3).fill(folder.tint).frame(width: 10, height: 10)
+                        Text(folder.name).foregroundStyle(.primary)
+                        if let parents = parentPath(folder) {
+                            Text(parents).foregroundStyle(.tertiary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .appFont(12.5)
+                    .lineLimit(1)
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(index == highlighted ? Color.accentColor.opacity(0.18) : .clear,
+                                in: RoundedRectangle(cornerRadius: 6))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+    }
+
+    /// Ancestor path (without the folder itself), for disambiguating same-named folders.
+    private func parentPath(_ folder: Folder) -> String? {
+        let parents = FolderTree.path(to: folder.id, in: allFolders).dropLast()
+        return parents.isEmpty ? nil : parents.map(\.name).joined(separator: " › ")
     }
 }
 

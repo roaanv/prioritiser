@@ -1,7 +1,8 @@
 // QuickAddBar.swift
 // The inline quick-add row at the top of the task list: a styled text field that
-// parses the prefix grammar as you type and surfaces recognized prefixes as
-// preview chips beneath, then creates the task on commit (Enter).
+// parses the prefix grammar as you type. While you're typing a `#tag`, a folder
+// autocomplete dropdown appears (Todoist-style: ↑/↓ to move, Enter/Tab/click to
+// pick, Esc to dismiss); otherwise recognized prefixes show as preview chips.
 
 import SwiftUI
 
@@ -11,18 +12,25 @@ struct QuickAddBar: View {
 
     @State private var text = ""
     @FocusState private var focused: Bool
+    @State private var highlighted = 0
+    @State private var suppressed = false
 
     private var parsed: ParsedQuickAdd { PrefixParser.parse(text, clock: model.clock) }
+    private var suggestions: [Folder] { QuickAddAutocomplete.suggestions(for: text, in: model.folders) }
+    private var showSuggestions: Bool { !suppressed && !suggestions.isEmpty }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             inputShell
-            if !parsed.tokens.isEmpty {
+            if showSuggestions {
+                FolderSuggestionList(folders: suggestions, allFolders: model.folders,
+                                     highlighted: highlighted, onPick: complete)
+            } else if !parsed.tokens.isEmpty {
                 PrefixChipRow(parsed: parsed, folders: model.folders, clock: model.clock)
                     .padding(.leading, 2)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .animation(.easeOut(duration: 0.12), value: showSuggestions)
         .animation(.easeOut(duration: 0.12), value: parsed.tokens.count)
     }
 
@@ -39,6 +47,12 @@ struct QuickAddBar: View {
                 .appFont(13)
                 .focused($focused)
                 .onSubmit(commit)
+                .onChange(of: text) { highlighted = 0; suppressed = false }
+                .onKeyPress(.upArrow) { moveHighlight(-1) }
+                .onKeyPress(.downArrow) { moveHighlight(1) }
+                .onKeyPress(.return) { acceptIfSuggesting() }
+                .onKeyPress(.tab) { acceptIfSuggesting() }
+                .onKeyPress(.escape) { dismissIfSuggesting() }
 
             HStack(spacing: 6) {
                 Text("Add").foregroundStyle(.tertiary)
@@ -55,6 +69,32 @@ struct QuickAddBar: View {
                 .strokeBorder(focused ? Color.accentColor : Color.primary.opacity(0.08),
                               lineWidth: focused ? 1.5 : 0.5)
         )
+    }
+
+    // MARK: - Autocomplete keyboard handling
+
+    private func moveHighlight(_ delta: Int) -> KeyPress.Result {
+        guard showSuggestions else { return .ignored }
+        highlighted = max(0, min(suggestions.count - 1, highlighted + delta))
+        return .handled
+    }
+
+    private func acceptIfSuggesting() -> KeyPress.Result {
+        guard showSuggestions, suggestions.indices.contains(highlighted) else { return .ignored }
+        complete(suggestions[highlighted])
+        return .handled
+    }
+
+    private func dismissIfSuggesting() -> KeyPress.Result {
+        guard showSuggestions else { return .ignored }
+        suppressed = true
+        return .handled
+    }
+
+    private func complete(_ folder: Folder) {
+        text = PrefixParser.completeHashtag(in: text, with: folder.nameSlug)
+        highlighted = 0
+        focused = true
     }
 
     private func commit() {

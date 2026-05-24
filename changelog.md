@@ -5,6 +5,20 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — `#project` autocomplete (Todoist-style)
+- Typing `#` (then partial text) in the inline quick-add bar or the ⌘N Spotlight now
+  shows a live dropdown of matching folders: **↑/↓** to move, **Enter/Tab** or click to
+  complete, **Esc** to dismiss (in Spotlight, a second Esc closes the sheet).
+- Matching ranks prefix hits first, then substring; each row shows the folder color
+  and its parent path for disambiguation. Completing inserts the folder slug
+  (`#design`) so the grammar parses cleanly; the preview chip shows the friendly name.
+- Pure helpers `PrefixParser.activeHashtagQuery` / `completeHashtag` and
+  `FolderTree.search`, shared by both inputs and covered by tests.
+- Completion inserts a **name-derived slug** (`Folder.nameSlug`: lowercased,
+  alphanumerics only) rather than the stored id — so "#Ope" → "#operations" (not
+  the surprising abbreviation "#ops"). The resolver matches by id *or* name slug, so
+  a literal `#ops` still works. (**40 tests**.)
+
 ### Added — App icon
 - Generated a native macOS app icon (blue-gradient squircle with a descending
   "ranked bars" priorities motif) via `tools/make_icon.swift` + CoreGraphics, with

@@ -55,4 +55,18 @@ struct PrefixParserTests {
         #expect(parsed.tokens.isEmpty)
         #expect(parsed.folderSlug == nil)
     }
+
+    @Test("Detects the in-progress trailing #tag for autocomplete")
+    func activeHashtag() {
+        #expect(PrefixParser.activeHashtagQuery(in: "Ship beta #pri") == "pri")
+        #expect(PrefixParser.activeHashtagQuery(in: "Ship beta #") == "")        // just typed '#'
+        #expect(PrefixParser.activeHashtagQuery(in: "Ship beta #work ") == nil)  // committed (trailing space)
+        #expect(PrefixParser.activeHashtagQuery(in: "no hashtag here") == nil)
+    }
+
+    @Test("Completing a hashtag replaces the partial with the slug + space")
+    func completeHashtag() {
+        #expect(PrefixParser.completeHashtag(in: "Ship beta #pri", with: "prioritiser") == "Ship beta #prioritiser ")
+        #expect(PrefixParser.completeHashtag(in: "Fix bug #", with: "design") == "Fix bug #design ")
+    }
 }

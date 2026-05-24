@@ -56,10 +56,35 @@ struct TaskFilterTests {
         #expect(all.allSatisfy { $0.state != .done })
     }
 
-    @Test("Folder slug resolves by id and by space-stripped name")
+    @Test("Folder resolves by id and by name slug")
     func slugResolution() {
-        #expect(FolderTree.folder(forSlug: "prioritiser", in: folders)?.id == "prioritiser")
+        // By id (a literal #ops still works for back-compat).
+        #expect(FolderTree.folder(forSlug: "ops", in: folders)?.id == "ops")
+        // By name slug — what autocomplete now inserts.
+        #expect(FolderTree.folder(forSlug: "operations", in: folders)?.id == "ops")
         #expect(FolderTree.folder(forSlug: "designreview", in: folders)?.id == "design")
         #expect(FolderTree.folder(forSlug: "nonexistent", in: folders) == nil)
+    }
+
+    @Test("Autocomplete completes to the name slug, which round-trips to the folder")
+    func nameSlugRoundTrip() {
+        let ops = folders.first { $0.id == "ops" }!
+        #expect(ops.nameSlug == "operations")
+        let completed = PrefixParser.completeHashtag(in: "Audit costs #Ope", with: ops.nameSlug)
+        #expect(completed == "Audit costs #operations ")
+        let parsed = PrefixParser.parse(completed.trimmingCharacters(in: .whitespaces), clock: clock)
+        #expect(FolderTree.folder(forSlug: parsed.folderSlug ?? "", in: folders)?.id == "ops")
+    }
+
+    @Test("Folder search prefers prefix matches, then substring")
+    func folderSearch() {
+        // "p" prefixes Personal and Prioritiser; both come before a substring-only match.
+        let results = FolderTree.search("p", in: folders).map(\.id)
+        #expect(results.contains("prioritiser"))
+        #expect(results.contains("personal"))
+        // "design" matches "Design Review" (id "design").
+        #expect(FolderTree.search("design", in: folders).first?.id == "design")
+        // No match → empty.
+        #expect(FolderTree.search("zzz", in: folders).isEmpty)
     }
 }

@@ -46,6 +46,31 @@ enum PrefixParser {
         options: [.caseInsensitive]
     )
 
+    // A `#tag` being typed at the end of the input (at a word boundary). Group 1
+    // is the `#…` token so completion can replace it without touching the lead space.
+    private static let trailingHashtag = try! NSRegularExpression(
+        pattern: #"(?:^|\s)(#[A-Za-z0-9_-]*)$"#
+    )
+
+    /// If the text ends with an in-progress `#tag`, the query after `#` (may be ""
+    /// right after typing `#`); otherwise nil. Drives folder autocomplete.
+    static func activeHashtagQuery(in text: String) -> String? {
+        let ns = text as NSString
+        guard let match = trailingHashtag.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) else {
+            return nil
+        }
+        return String(ns.substring(with: match.range(at: 1)).dropFirst()) // drop the '#'
+    }
+
+    /// Replace the trailing in-progress `#tag` with `#<slug> ` (committed token + space).
+    static func completeHashtag(in text: String, with slug: String) -> String {
+        let ns = text as NSString
+        guard let match = trailingHashtag.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) else {
+            return text
+        }
+        return ns.replacingCharacters(in: match.range(at: 1), with: "#\(slug) ")
+    }
+
     static func parse(_ text: String, clock: TaskClock = TaskClock()) -> ParsedQuickAdd {
         let ns = text as NSString
         let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))

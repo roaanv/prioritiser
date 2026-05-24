@@ -20,6 +20,16 @@ struct QuickAddBar: View {
     private var parsed: ParsedQuickAdd { PrefixParser.parse(text, clock: model.clock) }
     private var suggestions: [Folder] { QuickAddAutocomplete.suggestions(for: text, in: model.folders) }
     private var showSuggestions: Bool { !suppressed && !suggestions.isEmpty }
+    /// The i:/p: field being typed (only when a folder list isn't already showing).
+    private var activeLevel: PrefixParser.LevelField? {
+        guard !suppressed, !showSuggestions else { return nil }
+        return PrefixParser.activeLevelPrefix(in: text)
+    }
+    private var showLevels: Bool { activeLevel != nil }
+    private var isSuggesting: Bool { showSuggestions || showLevels }
+    private var suggestionCount: Int {
+        showSuggestions ? suggestions.count : (showLevels ? Level.pickerOrder.count : 0)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -27,12 +37,14 @@ struct QuickAddBar: View {
             if showSuggestions {
                 FolderSuggestionList(folders: suggestions, allFolders: model.folders,
                                      highlighted: highlighted, onPick: complete)
+            } else if let field = activeLevel {
+                LevelSuggestionList(field: field, highlighted: highlighted, onPick: completeLevel)
             } else if !parsed.tokens.isEmpty {
                 PrefixChipRow(parsed: parsed, folders: model.folders, clock: model.clock)
                     .padding(.leading, 2)
             }
         }
-        .animation(.easeOut(duration: 0.12), value: showSuggestions)
+        .animation(.easeOut(duration: 0.12), value: isSuggesting)
         .animation(.easeOut(duration: 0.12), value: parsed.tokens.count)
         .alert("Create project “\(pendingParsed?.folderSlug ?? "")”?",
                isPresented: Binding(get: { pendingParsed != nil },
@@ -57,7 +69,7 @@ struct QuickAddBar: View {
                 .appFont(13)
                 .focused($focused)
                 .onSubmit(commit)
-                .onChange(of: text) { highlighted = 0; suppressed = false }
+                .onChange(of: text) { highlighted = defaultHighlight(); suppressed = false }
                 .onKeyPress(.upArrow) { moveHighlight(-1) }
                 .onKeyPress(.downArrow) { moveHighlight(1) }
                 .onKeyPress(.return) { acceptIfSuggesting() }
@@ -84,21 +96,27 @@ struct QuickAddBar: View {
     // MARK: - Autocomplete keyboard handling
 
     private func moveHighlight(_ delta: Int) -> KeyPress.Result {
-        guard showSuggestions else { return .ignored }
-        highlighted = max(0, min(suggestions.count - 1, highlighted + delta))
+        guard isSuggesting else { return .ignored }
+        highlighted = max(0, min(suggestionCount - 1, highlighted + delta))
         return .handled
     }
 
     private func acceptIfSuggesting() -> KeyPress.Result {
-        guard showSuggestions, suggestions.indices.contains(highlighted) else { return .ignored }
-        complete(suggestions[highlighted])
-        return .handled
+        if showSuggestions, suggestions.indices.contains(highlighted) {
+            complete(suggestions[highlighted])
+            return .handled
+        }
+        if showLevels, Level.pickerOrder.indices.contains(highlighted) {
+            completeLevel(Level.pickerOrder[highlighted])
+            return .handled
+        }
+        return .ignored
     }
 
-    /// Escape: first dismiss the autocomplete dropdown if open; otherwise clear the
-    /// whole field (which also removes the preview chips, since they derive from text).
+    /// Escape: first dismiss an open suggestion dropdown; otherwise clear the whole
+    /// field (which also removes the preview chips, since they derive from text).
     private func handleEscape() -> KeyPress.Result {
-        if showSuggestions {
+        if isSuggesting {
             suppressed = true
             return .handled
         }
@@ -111,6 +129,22 @@ struct QuickAddBar: View {
         text = PrefixParser.completeHashtag(in: text, with: folder.nameSlug)
         highlighted = 0
         focused = true
+    }
+
+    private func completeLevel(_ level: Level) {
+        text = PrefixParser.completeLevel(in: text, with: level)
+        highlighted = 0
+        focused = true
+    }
+
+    /// Which row to highlight when the text changes: the value already typed in an
+    /// i:/p: token (e.g. "p:l" → Low), otherwise the first row.
+    private func defaultHighlight() -> Int {
+        if let level = PrefixParser.activeLevelValue(in: text),
+           let index = Level.pickerOrder.firstIndex(of: level) {
+            return index
+        }
+        return 0
     }
 
     private func commit() {

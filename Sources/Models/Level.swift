@@ -31,5 +31,17 @@ enum Level: Int, CaseIterable, Codable, Identifiable, Comparable {
         }
     }
 
+    /// The single-letter quick-add token ("h" / "m" / "l").
+    var token: String {
+        switch self {
+        case .low: return "l"
+        case .medium: return "m"
+        case .high: return "h"
+        }
+    }
+
+    /// High → Low: the order shown in the quick-add value picker.
+    static let pickerOrder: [Level] = [.high, .medium, .low]
+
     static func < (lhs: Level, rhs: Level) -> Bool { lhs.rawValue < rhs.rawValue }
 }

@@ -71,6 +71,54 @@ enum PrefixParser {
         return ns.replacingCharacters(in: match.range(at: 1), with: "#\(slug) ")
     }
 
+    /// Which level field (impact / priority) is being typed at the end of the input.
+    enum LevelField {
+        case impact, priority
+        /// The grammar marker (`i` / `p`).
+        var marker: String { self == .impact ? "i" : "p" }
+        /// Section title shown above the value suggestions.
+        var label: String { self == .impact ? "Impact" : "Priority" }
+    }
+
+    // A trailing in-progress `i:`/`p:` token at a word boundary. Group 1 is the whole
+    // token (so completion can replace it without touching the lead space), group 2 the
+    // i/p marker, group 3 the typed value. Matches even with an invalid partial value
+    // (e.g. "p:1"), so the valid options surface precisely when the user is going wrong.
+    private static let trailingLevel = try! NSRegularExpression(
+        pattern: #"(?:^|\s)(([ipIP]):(\S*))$"#
+    )
+
+    /// If the text ends with an in-progress `i:`/`p:` token, which field it is; else nil.
+    static func activeLevelPrefix(in text: String) -> LevelField? {
+        let ns = text as NSString
+        guard let match = trailingLevel.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) else {
+            return nil
+        }
+        return ns.substring(with: match.range(at: 2)).lowercased() == "i" ? .impact : .priority
+    }
+
+    /// The level the in-progress `i:`/`p:` value already resolves to (e.g. "p:l" → .low),
+    /// or nil if no valid value has been typed yet. Lets the picker pre-highlight the
+    /// option the user typed instead of always defaulting to the top row.
+    static func activeLevelValue(in text: String) -> Level? {
+        let ns = text as NSString
+        guard let match = trailingLevel.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) else {
+            return nil
+        }
+        return Level(token: ns.substring(with: match.range(at: 3)))
+    }
+
+    /// Replace the trailing in-progress `i:`/`p:` token with `<marker>:<token> `,
+    /// preserving whichever marker the user typed.
+    static func completeLevel(in text: String, with level: Level) -> String {
+        let ns = text as NSString
+        guard let match = trailingLevel.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) else {
+            return text
+        }
+        let marker = ns.substring(with: match.range(at: 2)).lowercased()
+        return ns.replacingCharacters(in: match.range(at: 1), with: "\(marker):\(level.token) ")
+    }
+
     static func parse(_ text: String, clock: TaskClock = TaskClock()) -> ParsedQuickAdd {
         let ns = text as NSString
         let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))

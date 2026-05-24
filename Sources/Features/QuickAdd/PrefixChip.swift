@@ -110,6 +110,48 @@ struct FolderSuggestionList: View {
     }
 }
 
+/// Value suggestions for an in-progress `i:`/`p:` token: High / Medium / Low, each
+/// showing the token it inserts (e.g. "p:h"). Same look + keyboard model as the
+/// folder list, so ↑/↓ + Enter/Tab/click all work the same way.
+struct LevelSuggestionList: View {
+    let field: PrefixParser.LevelField
+    let highlighted: Int
+    let onPick: (Level) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(field.label.uppercased())
+                .font(.system(size: 10, weight: .semibold)).kerning(0.5)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8).padding(.top, 3).padding(.bottom, 1)
+            ForEach(Array(Level.pickerOrder.enumerated()), id: \.element.id) { index, level in
+                Button { onPick(level) } label: {
+                    HStack(spacing: 8) {
+                        Text(level.label).foregroundStyle(.primary)
+                        Spacer(minLength: 0)
+                        Text("\(field.marker):\(level.token)")
+                            .foregroundStyle(.secondary)
+                            .monospaced()
+                    }
+                    .appFont(12.5)
+                    .lineLimit(1)
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(index == highlighted ? Color.accentColor.opacity(0.18) : .clear,
+                                in: RoundedRectangle(cornerRadius: 6))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+    }
+}
+
 /// A horizontal run of preview chips for a parsed quick-add result.
 struct PrefixChipRow: View {
     let parsed: ParsedQuickAdd

@@ -18,6 +18,16 @@ struct QuickAddSpotlight: View {
     private var parsed: ParsedQuickAdd { PrefixParser.parse(text, clock: model.clock) }
     private var suggestions: [Folder] { QuickAddAutocomplete.suggestions(for: text, in: model.folders) }
     private var showSuggestions: Bool { !suppressed && !suggestions.isEmpty }
+    /// The i:/p: field being typed (only when a folder list isn't already showing).
+    private var activeLevel: PrefixParser.LevelField? {
+        guard !suppressed, !showSuggestions else { return nil }
+        return PrefixParser.activeLevelPrefix(in: text)
+    }
+    private var showLevels: Bool { activeLevel != nil }
+    private var isSuggesting: Bool { showSuggestions || showLevels }
+    private var suggestionCount: Int {
+        showSuggestions ? suggestions.count : (showLevels ? Level.pickerOrder.count : 0)
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -59,6 +69,10 @@ struct QuickAddSpotlight: View {
                 FolderSuggestionList(folders: suggestions, allFolders: model.folders,
                                      highlighted: highlighted, onPick: complete)
                     .padding(8)
+            } else if let field = activeLevel {
+                Divider()
+                LevelSuggestionList(field: field, highlighted: highlighted, onPick: completeLevel)
+                    .padding(8)
             }
             Divider()
             previewRow
@@ -82,7 +96,7 @@ struct QuickAddSpotlight: View {
                 .appFont(17, relativeTo: .title3)
                 .focused($focused)
                 .onSubmit(commit)
-                .onChange(of: text) { highlighted = 0; suppressed = false }
+                .onChange(of: text) { highlighted = defaultHighlight(); suppressed = false }
                 .onKeyPress(.upArrow) { moveHighlight(-1) }
                 .onKeyPress(.downArrow) { moveHighlight(1) }
                 .onKeyPress(.return) { acceptIfSuggesting() }
@@ -163,19 +177,25 @@ struct QuickAddSpotlight: View {
     // MARK: - Autocomplete keyboard handling
 
     private func moveHighlight(_ delta: Int) -> KeyPress.Result {
-        guard showSuggestions else { return .ignored }
-        highlighted = max(0, min(suggestions.count - 1, highlighted + delta))
+        guard isSuggesting else { return .ignored }
+        highlighted = max(0, min(suggestionCount - 1, highlighted + delta))
         return .handled
     }
 
     private func acceptIfSuggesting() -> KeyPress.Result {
-        guard showSuggestions, suggestions.indices.contains(highlighted) else { return .ignored }
-        complete(suggestions[highlighted])
-        return .handled
+        if showSuggestions, suggestions.indices.contains(highlighted) {
+            complete(suggestions[highlighted])
+            return .handled
+        }
+        if showLevels, Level.pickerOrder.indices.contains(highlighted) {
+            completeLevel(Level.pickerOrder[highlighted])
+            return .handled
+        }
+        return .ignored
     }
 
     private func dismissIfSuggesting() -> KeyPress.Result {
-        guard showSuggestions else { return .ignored } // let Esc close the sheet
+        guard isSuggesting else { return .ignored } // let Esc close the sheet
         suppressed = true
         return .handled
     }
@@ -184,5 +204,21 @@ struct QuickAddSpotlight: View {
         text = PrefixParser.completeHashtag(in: text, with: folder.nameSlug)
         highlighted = 0
         focused = true
+    }
+
+    private func completeLevel(_ level: Level) {
+        text = PrefixParser.completeLevel(in: text, with: level)
+        highlighted = 0
+        focused = true
+    }
+
+    /// Which row to highlight when the text changes: the value already typed in an
+    /// i:/p: token (e.g. "p:l" → Low), otherwise the first row.
+    private func defaultHighlight() -> Int {
+        if let level = PrefixParser.activeLevelValue(in: text),
+           let index = Level.pickerOrder.firstIndex(of: level) {
+            return index
+        }
+        return 0
     }
 }

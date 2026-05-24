@@ -5,6 +5,16 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — value picker for i:/p: in quick-add
+- Typing `i:` or `p:` now shows a **High / Medium / Low** dropdown (the only valid
+  values) — ↑/↓ + Enter/Tab or click fills it in (e.g. → `p:h`), so an invalid entry
+  like `p:1` (which used to be silently swallowed into the title) is no longer easy to
+  make. Works in the inline quick-add bar, the ⌘N Spotlight, and the global capture box.
+- The dropdown **pre-highlights the value already typed** — e.g. `i:l` highlights Low,
+  not the top row — so what you typed and what Enter will accept stay in sync.
+- Pure detection/completion (`PrefixParser.activeLevelPrefix` / `activeLevelValue` /
+  `completeLevel`, `Level.token` / `pickerOrder`) is unit-tested (**70 tests**).
+
 ### Added — editable task title
 - The task title in the detail pane is now an inline editable field (it was static
   text). Edits persist as you type, mirroring the notes editor; empty input is ignored

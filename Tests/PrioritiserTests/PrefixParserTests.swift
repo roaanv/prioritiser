@@ -69,4 +69,35 @@ struct PrefixParserTests {
         #expect(PrefixParser.completeHashtag(in: "Ship beta #pri", with: "prioritiser") == "Ship beta #prioritiser ")
         #expect(PrefixParser.completeHashtag(in: "Fix bug #", with: "design") == "Fix bug #design ")
     }
+
+    @Test("Detects the in-progress trailing i:/p: token for value suggestions")
+    func activeLevelPrefix() {
+        #expect(PrefixParser.activeLevelPrefix(in: "Task p:") == .priority)
+        #expect(PrefixParser.activeLevelPrefix(in: "Task i:") == .impact)
+        #expect(PrefixParser.activeLevelPrefix(in: "Task p:1") == .priority)  // invalid value still detected
+        #expect(PrefixParser.activeLevelPrefix(in: "p:") == .priority)        // at string start
+        #expect(PrefixParser.activeLevelPrefix(in: "Task p:h ") == nil)       // committed (trailing space)
+        #expect(PrefixParser.activeLevelPrefix(in: "tip:") == nil)            // not a word-boundary token
+        #expect(PrefixParser.activeLevelPrefix(in: "no prefix") == nil)
+    }
+
+    @Test("Completing an i:/p: token inserts the level letter + space and parses")
+    func completeLevel() {
+        #expect(PrefixParser.completeLevel(in: "Ship it p:", with: .high) == "Ship it p:h ")
+        #expect(PrefixParser.completeLevel(in: "Ship it i:1", with: .low) == "Ship it i:l ") // replaces bad value
+        #expect(PrefixParser.completeLevel(in: "p:", with: .medium) == "p:m ")
+
+        let completed = PrefixParser.completeLevel(in: "Ship it p:", with: .high)
+        let parsed = PrefixParser.parse(completed)
+        #expect(parsed.priority == .high)
+        #expect(parsed.title == "Ship it")
+    }
+
+    @Test("Resolves the typed i:/p: value so the picker can pre-highlight it")
+    func activeLevelValue() {
+        #expect(PrefixParser.activeLevelValue(in: "Task i:l") == .low)
+        #expect(PrefixParser.activeLevelValue(in: "Task p:h") == .high)
+        #expect(PrefixParser.activeLevelValue(in: "Task p:") == nil)   // nothing typed yet
+        #expect(PrefixParser.activeLevelValue(in: "Task p:1") == nil)  // invalid value
+    }
 }

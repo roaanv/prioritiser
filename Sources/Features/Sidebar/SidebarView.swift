@@ -12,6 +12,12 @@ struct SidebarView: View {
     @State private var draftName = ""
     @FocusState private var renameFocused: Bool
     @FocusState private var searchFocused: Bool
+    /// Folder id currently hovered as a drag drop-target for "move into" (highlight).
+    @State private var dropTargetID: String?
+    /// Folder id whose top-edge insertion strip is hovered (reorder "before" line).
+    @State private var insertTargetID: String?
+    /// True while a folder is dragged over the "Folders" header (move-to-root target).
+    @State private var rootTargeted = false
 
     /// Gold tint for the "Top Priorities" spark icon (prototype: oklch 0.62 0.18 60).
     private let topTint = OKLCH(0.62, 0.18, 60).color
@@ -60,6 +66,15 @@ struct SidebarView: View {
             .help("New folder")
             .accessibilityLabel("New folder")
         }
+        .contentShape(Rectangle())
+        .background(rootTargeted ? Color.accentColor.opacity(0.15) : .clear,
+                    in: RoundedRectangle(cornerRadius: 5))
+        // Drop a folder here to move it to the top level (out of its parent).
+        .dropDestination(for: String.self) { items, _ in
+            if let dragged = items.first { model.reparentFolder(dragged, under: nil) }
+            rootTargeted = false
+            return true
+        } isTargeted: { rootTargeted = $0 }
     }
 
     // MARK: - Rows
@@ -114,20 +129,52 @@ struct SidebarView: View {
         }
         .appFont(13)
         .padding(.leading, CGFloat(item.depth) * 14)
+        .background(dropTargetID == folder.id ? Color.accentColor.opacity(0.15) : .clear,
+                    in: RoundedRectangle(cornerRadius: 5))
+        // Top-edge strip = the gap above this row: drop here to reorder (insert before).
+        .overlay(alignment: .top) { insertionStrip(before: folder.id, depth: item.depth) }
         .contextMenu {
             Button("Rename") { beginRename(folder) }
             Button("New Subfolder") { startNewFolder(parentID: folder.id) }
+            if !folder.isSystem && folder.parentId != nil {
+                Button("Move to Top Level") { model.reparentFolder(folder.id, under: nil) }
+            }
             if !folder.isSystem {
                 Divider()
                 Button("Delete", role: .destructive) { model.deleteFolder(id: folder.id) }
             }
         }
         .draggable(folder.id)
+        // Drop another folder here to move it into this one (re-parent).
         .dropDestination(for: String.self) { items, _ in
-            // Reorder among siblings (moveFolder ignores cross-parent drops).
-            if let dragged = items.first { model.moveFolder(dragged, before: folder.id) }
+            if let dragged = items.first { model.reparentFolder(dragged, under: folder.id) }
+            dropTargetID = nil
             return true
+        } isTargeted: { targeted in
+            dropTargetID = targeted ? folder.id : (dropTargetID == folder.id ? nil : dropTargetID)
         }
+    }
+
+    /// A thin drop strip on a row's top edge — the gap above it. Dropping a folder
+    /// here reorders it to just before this row (within this row's parent); an accent
+    /// line shows the insertion point.
+    private func insertionStrip(before folderID: String, depth: Int) -> some View {
+        Color.clear
+            .frame(height: 9)
+            .contentShape(Rectangle())
+            .dropDestination(for: String.self) { items, _ in
+                if let dragged = items.first { model.moveFolder(dragged, before: folderID) }
+                insertTargetID = nil
+                return true
+            } isTargeted: { targeted in
+                insertTargetID = targeted ? folderID : (insertTargetID == folderID ? nil : insertTargetID)
+            }
+            .overlay(alignment: .top) {
+                if insertTargetID == folderID {
+                    Capsule().fill(Color.accentColor).frame(height: 2)
+                        .padding(.leading, CGFloat(depth) * 14 + 4)
+                }
+            }
     }
 
     // MARK: - Folder editing

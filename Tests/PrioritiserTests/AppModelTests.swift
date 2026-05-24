@@ -71,18 +71,54 @@ struct AppModelTests {
         #expect(model.tasks.first { $0.id == "t18" }?.state == .snoozed)
     }
 
-    @Test func moveFolderReordersSiblings() throws {
+    @Test func reparentMovesFolderUnderNewParent() throws {
         let model = try makeModel()
-        model.moveFolder("personal", before: "inbox")
+        model.reparentFolder("reading", under: "work") // root → child of work
+        #expect(model.folders.first { $0.id == "reading" }?.parentId == "work")
+    }
+
+    @Test func reparentToRootMovesFolderOut() throws {
+        let model = try makeModel()
+        model.reparentFolder("prioritiser", under: nil) // child of work → top level
+        #expect(model.folders.first { $0.id == "prioritiser" }?.parentId == nil)
+    }
+
+    @Test func reparentRejectsCycles() throws {
+        let model = try makeModel()
+        // Moving "work" under its own descendant "prioritiser" must be rejected.
+        model.reparentFolder("work", under: "prioritiser")
+        #expect(model.folders.first { $0.id == "work" }?.parentId == nil)
+    }
+
+    @Test func reparentLeavesSystemFolderAlone() throws {
+        let model = try makeModel()
+        model.reparentFolder("inbox", under: "work")
+        #expect(model.folders.first { $0.id == "inbox" }?.parentId == nil)
+    }
+
+    @Test func moveFolderBeforeReordersWithinParent() throws {
+        let model = try makeModel()
+        model.moveFolder("personal", before: "inbox") // both roots → reorder
         let roots = model.folders.filter { $0.parentId == nil }.map(\.id)
         #expect(roots.firstIndex(of: "personal")! < roots.firstIndex(of: "inbox")!)
     }
 
-    @Test func moveFolderIgnoresCrossParentDrops() throws {
+    @Test func moveFolderBeforeRepositionsAcrossParents() throws {
         let model = try makeModel()
-        let before = model.folders.map(\.id)
-        model.moveFolder("prioritiser", before: "inbox") // child of work onto a root → ignored
-        #expect(model.folders.map(\.id) == before)
+        // "prioritiser" (child of work) dropped in the gap before root "reading"
+        // becomes a root, positioned before reading.
+        model.moveFolder("prioritiser", before: "reading")
+        #expect(model.folders.first { $0.id == "prioritiser" }?.parentId == nil)
+        let roots = model.folders.filter { $0.parentId == nil }.map(\.id)
+        #expect(roots.firstIndex(of: "prioritiser")! < roots.firstIndex(of: "reading")!)
+    }
+
+    @Test func createFolderAndTaskCreatesUnknownProject() throws {
+        let model = try makeModel()
+        #expect(model.knownFolder(forSlug: "newproj") == nil)
+        model.createFolderAndTask(from: PrefixParser.parse("Plan the thing #newproj", clock: model.clock))
+        let folder = try #require(model.folders.first { $0.nameSlug == "newproj" })
+        #expect(model.tasks.first { $0.title == "Plan the thing" }?.folderId == folder.id)
     }
 }
 

@@ -178,19 +178,62 @@ final class AppModel {
         }
     }
 
-    /// Reorder a folder among its siblings (same parent) and persist the order.
+    /// Move a folder under a new parent (`nil` = top level), persisting the change.
+    /// Guards against moving a system folder, and against cycles (a folder can't be
+    /// moved into itself or one of its own descendants). The moved folder is placed
+    /// last among its new siblings.
+    func reparentFolder(_ draggedID: String, under newParentID: String?) {
+        guard let dragged = folder(id: draggedID), !dragged.isSystem,
+              dragged.parentId != newParentID,
+              let index = folders.firstIndex(where: { $0.id == draggedID }) else { return }
+        if let newParentID {
+            guard newParentID != draggedID,
+                  !FolderTree.isDescendant(newParentID, ofOrEqual: draggedID, in: folders) else { return }
+        }
+        folders[index].parentId = newParentID
+        store.updateFolder(folders[index])
+        store.updateFolderSortOrder(id: draggedID, sortOrder: store.maxFolderSortOrder() + 1)
+        folders = store.loadFolders() // re-sort in memory to match the persisted order
+        if let newParentID { expandedFolders.insert(newParentID) } // reveal the move
+    }
+
+    /// Insert a folder immediately before `targetID`, among `target`'s siblings
+    /// (re-parenting to the target's parent if needed). Used for drop-between
+    /// reordering. Guards system folders and cycles, then persists the new order.
     func moveFolder(_ draggedID: String, before targetID: String) {
         guard draggedID != targetID,
-              let dragged = folder(id: draggedID),
+              let dragged = folder(id: draggedID), !dragged.isSystem,
               let target = folder(id: targetID),
-              dragged.parentId == target.parentId,
               let from = folders.firstIndex(where: { $0.id == draggedID }) else { return }
-        let item = folders.remove(at: from)
-        let insertAt = folders.firstIndex(where: { $0.id == targetID }) ?? folders.endIndex
-        folders.insert(item, at: insertAt)
+        let newParent = target.parentId
+        if let newParent {
+            guard newParent != draggedID,
+                  !FolderTree.isDescendant(newParent, ofOrEqual: draggedID, in: folders) else { return }
+        }
+        var moved = folders.remove(at: from)
+        moved.parentId = newParent
+        let targetIndex = folders.firstIndex(where: { $0.id == targetID }) ?? folders.endIndex
+        folders.insert(moved, at: targetIndex)
+        store.updateFolder(moved)
         for (index, folder) in folders.enumerated() {
             store.updateFolderSortOrder(id: folder.id, sortOrder: index)
         }
+        if let newParent { expandedFolders.insert(newParent) }
+    }
+
+    /// The existing folder a `#slug` resolves to, if any (nil = would be new).
+    func knownFolder(forSlug slug: String) -> Folder? {
+        FolderTree.folder(forSlug: slug, in: folders)
+    }
+
+    /// Create the task, first creating a new top-level folder for an unknown
+    /// `#slug` and filing the task directly into it.
+    func createFolderAndTask(from parsed: ParsedQuickAdd) {
+        var parsed = parsed
+        if let slug = parsed.folderSlug, knownFolder(forSlug: slug) == nil {
+            parsed.folderSlug = addFolder(name: slug, parentId: nil) // point at the real new id
+        }
+        createTask(from: parsed)
     }
 
     /// Move `draggedID` to just before `targetID` and persist the new ordering.

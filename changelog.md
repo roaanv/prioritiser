@@ -5,6 +5,20 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — create-on-commit projects + folder re-parenting
+- **Unknown `#project` prompts to create.** When a task is committed (Enter), if its
+  `#slug` doesn't match an existing folder, a confirmation asks "Create project …?".
+  Create → makes a top-level folder and files the task into it; Cancel → returns to
+  editing with the text intact. This fires at commit time, not while typing/completing.
+- **Drag-and-drop folder reordering AND re-parenting.** Each row has a thin top-edge
+  strip (the gap above it): dropping there **reorders** the folder to that position
+  (shown by an accent insertion line), re-parenting if the gap is under a different
+  parent. Dropping on a row **body** moves the folder *into* that folder; dropping on
+  the "Folders" header (or the "Move to Top Level" context item) moves it to the top
+  level. Guards against cycles (no dropping into a descendant) and the system Inbox.
+- Tests: reparent into/out, cycle + system-folder guards, and create-folder-and-task
+  (**43 tests total**).
+
 ### Added — `#project` autocomplete (Todoist-style)
 - Typing `#` (then partial text) in the inline quick-add bar or the ⌘N Spotlight now
   shows a live dropdown of matching folders: **↑/↓** to move, **Enter/Tab** or click to

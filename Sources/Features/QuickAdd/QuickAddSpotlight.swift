@@ -11,6 +11,7 @@ struct QuickAddSpotlight: View {
     @FocusState private var focused: Bool
     @State private var highlighted = 0
     @State private var suppressed = false
+    @State private var pendingParsed: ParsedQuickAdd?
     let onClose: () -> Void
     let onCreate: (ParsedQuickAdd) -> Void
 
@@ -31,6 +32,14 @@ struct QuickAddSpotlight: View {
         .ignoresSafeArea()
         .onExitCommand(perform: onClose)
         .onAppear { focused = true }
+        .alert("Create project “\(pendingParsed?.folderSlug ?? "")”?",
+               isPresented: Binding(get: { pendingParsed != nil },
+                                    set: { if !$0 { pendingParsed = nil } })) {
+            Button("Create") { confirmCreate() }
+            Button("Cancel", role: .cancel) { pendingParsed = nil }
+        } message: {
+            Text("This project doesn’t exist yet.")
+        }
     }
 
     private var backdrop: some View {
@@ -134,8 +143,21 @@ struct QuickAddSpotlight: View {
 
     private func commit() {
         guard !parsed.title.isEmpty else { return }
-        onCreate(parsed)
-        onClose()
+        // Unknown #project → confirm before creating (handled at commit, not while typing).
+        if let slug = parsed.folderSlug, model.knownFolder(forSlug: slug) == nil {
+            pendingParsed = parsed
+        } else {
+            onCreate(parsed)
+            onClose()
+        }
+    }
+
+    private func confirmCreate() {
+        if let parsed = pendingParsed {
+            model.createFolderAndTask(from: parsed)
+            onClose()
+        }
+        pendingParsed = nil
     }
 
     // MARK: - Autocomplete keyboard handling

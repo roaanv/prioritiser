@@ -14,6 +14,8 @@ struct QuickAddBar: View {
     @FocusState private var focused: Bool
     @State private var highlighted = 0
     @State private var suppressed = false
+    /// Set when committing a task whose #project doesn't exist yet (awaiting confirm).
+    @State private var pendingParsed: ParsedQuickAdd?
 
     private var parsed: ParsedQuickAdd { PrefixParser.parse(text, clock: model.clock) }
     private var suggestions: [Folder] { QuickAddAutocomplete.suggestions(for: text, in: model.folders) }
@@ -32,6 +34,14 @@ struct QuickAddBar: View {
         }
         .animation(.easeOut(duration: 0.12), value: showSuggestions)
         .animation(.easeOut(duration: 0.12), value: parsed.tokens.count)
+        .alert("Create project “\(pendingParsed?.folderSlug ?? "")”?",
+               isPresented: Binding(get: { pendingParsed != nil },
+                                    set: { if !$0 { pendingParsed = nil } })) {
+            Button("Create") { confirmCreate() }
+            Button("Cancel", role: .cancel) { pendingParsed = nil }
+        } message: {
+            Text("This project doesn’t exist yet.")
+        }
     }
 
     private var inputShell: some View {
@@ -52,7 +62,7 @@ struct QuickAddBar: View {
                 .onKeyPress(.downArrow) { moveHighlight(1) }
                 .onKeyPress(.return) { acceptIfSuggesting() }
                 .onKeyPress(.tab) { acceptIfSuggesting() }
-                .onKeyPress(.escape) { dismissIfSuggesting() }
+                .onKeyPress(.escape) { handleEscape() }
 
             HStack(spacing: 6) {
                 Text("Add").foregroundStyle(.tertiary)
@@ -85,9 +95,15 @@ struct QuickAddBar: View {
         return .handled
     }
 
-    private func dismissIfSuggesting() -> KeyPress.Result {
-        guard showSuggestions else { return .ignored }
-        suppressed = true
+    /// Escape: first dismiss the autocomplete dropdown if open; otherwise clear the
+    /// whole field (which also removes the preview chips, since they derive from text).
+    private func handleEscape() -> KeyPress.Result {
+        if showSuggestions {
+            suppressed = true
+            return .handled
+        }
+        guard !text.isEmpty else { return .ignored }
+        text = ""
         return .handled
     }
 
@@ -99,7 +115,20 @@ struct QuickAddBar: View {
 
     private func commit() {
         guard !parsed.title.isEmpty else { return }
-        onCreate(parsed)
-        text = ""
+        // Unknown #project → confirm before creating (handled at commit, not while typing).
+        if let slug = parsed.folderSlug, model.knownFolder(forSlug: slug) == nil {
+            pendingParsed = parsed
+        } else {
+            onCreate(parsed)
+            text = ""
+        }
+    }
+
+    private func confirmCreate() {
+        if let parsed = pendingParsed {
+            model.createFolderAndTask(from: parsed)
+            text = ""
+        }
+        pendingParsed = nil
     }
 }

@@ -5,6 +5,13 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — arrow-key list navigation
+- **↑ / ↓** move the selection up and down the visible task list (matching the on-screen
+  order, including the schedule buckets and top-priority bands) and scroll the selected
+  row into view. With nothing selected, ↓ picks the first row and ↑ the last. Navigation
+  is scoped to the list via focus, so arrows still move the text cursor while editing
+  notes or the quick-add field.
+
 ### Added — task deletion (single + multi-select)
 - Tasks can now be deleted: **right-click** a row for a **Delete** item, or press
   **⌘⌫** while the list is focused. Deleting two or more tasks asks for confirmation

@@ -56,12 +56,6 @@ struct TaskRowView: View {
     /// A click selects per the held modifiers: ⌘ toggles this row in/out of the
     /// selection, ⇧ extends the range from the primary, a plain click selects only it.
     private func handleClick() {
-        // Selecting in the list moves keyboard focus off any text editor (e.g. the
-        // detail Notes field), so ⌘⌫ targets the list selection rather than no-opping
-        // because a text view is first responder.
-        if let window = NSApp.keyWindow, window.firstResponder is NSText {
-            window.makeFirstResponder(nil)
-        }
         let modifiers = NSEvent.modifierFlags
         if modifiers.contains(.command) {
             model.toggleInSelection(task.id)

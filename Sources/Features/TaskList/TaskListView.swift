@@ -14,23 +14,34 @@ struct TaskListView: View {
     @State private var layout: TaskViewMode = .list
     @State private var sortKey: TaskSort = .manual
     @State private var stateFilter: StateFilter = .all
+    @FocusState private var listFocused: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            QuickAddBar { model.createTask(from: $0) }
-                .padding(.horizontal, 28)
-                .padding(.bottom, 14)
-            taskScroll
-            footer
-        }
-        .background(Color(nsColor: .textBackgroundColor))
-        .background { deleteShortcut }
-        .alert("Delete tasks?", isPresented: deletionAlertBinding, presenting: model.pendingDeletion) { _ in
-            Button("Delete", role: .destructive) { model.confirmPendingDeletion() }
-            Button("Cancel", role: .cancel) { model.pendingDeletion = nil }
-        } message: { ids in
-            Text("Permanently delete \(ids.count) tasks? This can’t be undone.")
+        ScrollViewReader { proxy in
+            VStack(spacing: 0) {
+                header
+                QuickAddBar { model.createTask(from: $0) }
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 14)
+                taskScroll
+                footer
+            }
+            .background(Color(nsColor: .textBackgroundColor))
+            .background { deleteShortcut }
+            // Focus the list pane so ↑/↓ move the selection and ⌘⌫ deletes; selecting
+            // a row (which changes the selection) re-focuses it, off any text editor.
+            .focusable()
+            .focusEffectDisabled()
+            .focused($listFocused)
+            .onMoveCommand { direction in move(direction, proxy: proxy) }
+            .onAppear { listFocused = true }
+            .onChange(of: model.selectedTaskIDs) { listFocused = true }
+            .alert("Delete tasks?", isPresented: deletionAlertBinding, presenting: model.pendingDeletion) { _ in
+                Button("Delete", role: .destructive) { model.confirmPendingDeletion() }
+                Button("Cancel", role: .cancel) { model.pendingDeletion = nil }
+            } message: { ids in
+                Text("Permanently delete \(ids.count) tasks? This can’t be undone.")
+            }
         }
     }
 
@@ -55,6 +66,41 @@ struct TaskListView: View {
     private var deletionAlertBinding: Binding<Bool> {
         Binding(get: { model.pendingDeletion != nil },
                 set: { presented in if !presented { model.pendingDeletion = nil } })
+    }
+
+    // MARK: - Keyboard navigation
+
+    /// The visible task ids in display order — what ↑/↓ steps through (matches the
+    /// rendered grouping for the schedule and top-priority layouts).
+    private var navigableIDs: [String] {
+        if layout == .schedule {
+            return DueBucket.allCases.flatMap { bucket in
+                displayTasks
+                    .filter { DueBucket.bucket(for: $0.due, clock: model.clock) == bucket }
+                    .map(\.id)
+            }
+        } else if isTopView {
+            return topTasks.map(\.id)
+        } else {
+            return displayTasks.map(\.id)
+        }
+    }
+
+    /// Move the (single) selection up/down the visible list, scrolling it into view.
+    /// With nothing selected, ↓ picks the first row and ↑ the last.
+    private func move(_ direction: MoveCommandDirection, proxy: ScrollViewProxy) {
+        let ids = navigableIDs
+        guard !ids.isEmpty else { return }
+        let current = model.selectedTaskID.flatMap { ids.firstIndex(of: $0) }
+        let target: Int
+        switch direction {
+        case .up:   target = current.map { max(0, $0 - 1) } ?? (ids.count - 1)
+        case .down: target = current.map { min(ids.count - 1, $0 + 1) } ?? 0
+        default:    return
+        }
+        let id = ids[target]
+        model.selectOnly(id)
+        proxy.scrollTo(id)
     }
 
     // MARK: - Display pipeline
@@ -215,6 +261,7 @@ struct TaskListView: View {
         VStack(spacing: 4) {
             ForEach(Array(top.enumerated()), id: \.element.id) { index, task in
                 TaskRowView(task: task, rank: vizMode == .cards ? index + 1 : nil, vizMode: vizMode)
+                    .id(task.id)
             }
         }
         if !rest.isEmpty {
@@ -264,6 +311,7 @@ struct TaskListView: View {
                     Divider().opacity(0.4).padding(.horizontal, 14)
                 }
                 row(task, vizMode: vizMode, reorderable: reorderable)
+                    .id(task.id)
             }
         }
     }

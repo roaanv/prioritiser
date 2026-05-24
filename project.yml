@@ -13,7 +13,7 @@ settings:
   base:
     # Swift 6 language mode: complete data-race safety / strict concurrency.
     SWIFT_VERSION: "6.0"
-    MARKETING_VERSION: "0.1.4"
+    MARKETING_VERSION: "0.1.5"
     CURRENT_PROJECT_VERSION: "1"
     # Local development: ad-hoc sign, no provisioning required.
     CODE_SIGN_STYLE: Manual

@@ -21,9 +21,10 @@ mode and has a VoiceOver accessibility pass. See
 for the roadmap and [`changelog.md`](changelog.md) for details.
 
 Search (⌘F), the Schedule view, Sort/Filter menus, a persisted activity feed,
-drag-reorder (All Tasks), and Dynamic Type are all wired up too. The remaining
-follow-up is an app icon + signed/notarized distribution (the `make deploy` archive
-is currently unsigned).
+drag-reorder (All Tasks), and Dynamic Type are all wired up too. The app ships with
+a native icon, and **signed + notarized distribution** is automated: pushing a `v*`
+tag builds a universal `.dmg`/`.zip` and publishes them (see
+[`RELEASE.md`](RELEASE.md)).
 
 ## Requirements
 

@@ -5,6 +5,19 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — signed/notarized release pipeline (GitHub Actions)
+- A tag-driven (`v*`) workflow (`.github/workflows/release.yml`) runs the tests,
+  then builds a **universal (arm64 + x86_64)** Release binary, **Developer ID**-signs
+  it with the hardened runtime, **notarizes + staples** the `.app`, packages it as a
+  `.dmg` (also notarized/stapled) and a `.zip`, and publishes both to this repo's
+  Releases **and** to the shared `roaanv/releases` repo (tagged `prioritiser-v*`).
+- New `make` targets back the pipeline (and run locally): `release`, `sign`,
+  `notarize-app`, `dmg`, `notarize-dmg`, `archive`, plus `gh-secrets` to push the
+  six required secrets from the macOS Keychain. The local Debug build stays ad-hoc;
+  Developer ID + hardened runtime are applied at sign time, so `project.yml` is
+  unchanged. Added a minimal `Prioritiser.entitlements` and a `scripts/` helper.
+- Documented the credential/secret setup and release steps in `RELEASE.md`.
+
 ### Added — project priority matrix (Eisenhower 2×2)
 - A "Priority Matrix" panel pinned below the detail pane shows per-quadrant task
   counts for the sidebar-selected project. Axes map onto our data: **Important** =

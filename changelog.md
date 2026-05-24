@@ -5,6 +5,10 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Removed — placeholder user footer
+- Dropped the hardcoded "Alex" user chip from the bottom of the sidebar (leftover
+  prototype chrome). Prioritiser is a single-user app, so there's no account to show.
+
 ### Added — one-step release bump targets
 - `make release-patch` / `make release-minor` bump `MARKETING_VERSION` in
   `project.yml`, commit (`release: vX.Y.Z`), tag, and push from `main` — triggering

@@ -48,7 +48,6 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) { userFooter }
         .onChange(of: model.focusSearchToken) { searchFocused = true }
     }
 
@@ -223,27 +222,6 @@ struct SidebarView: View {
             .monospacedDigit()
             .foregroundStyle(selected ? AnyShapeStyle(.white)
                              : AnyShapeStyle(alert ? Palette.overdueText(scheme: .light) : Color.secondary))
-    }
-
-    private var userFooter: some View {
-        HStack(spacing: 8) {
-            Text("A")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 22, height: 22)
-                .background(
-                    LinearGradient(colors: [Color.accentColor, Color.accentColor.opacity(0.7)],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing),
-                    in: Circle()
-                )
-            Text("Alex")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.bar)
     }
 
     // MARK: - Folder flattening

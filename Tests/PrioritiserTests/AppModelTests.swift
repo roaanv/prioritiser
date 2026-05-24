@@ -275,6 +275,48 @@ struct AppModelTests {
         #expect(model.tasks.contains { $0.id == order[2] } == false)
         #expect(model.selectedTaskIDs.contains(order[2]) == false)
     }
+
+    // MARK: - Focus mode
+
+    @Test func todayAndOverdueExcludesFutureDoneSnoozedAndNoDue() {
+        let clock = TaskClock(now: referenceDate)
+        let today = clock.today
+        let tasks = [
+            TaskItem(id: "today", title: "t", folderId: "inbox", due: today),
+            TaskItem(id: "overdue", title: "o", folderId: "inbox", due: clock.addingDays(-2, to: today)),
+            TaskItem(id: "future", title: "f", folderId: "inbox", due: clock.addingDays(3, to: today)),
+            TaskItem(id: "nodue", title: "n", folderId: "inbox", due: nil),
+            TaskItem(id: "done", title: "d", folderId: "inbox", due: today, state: .done),
+            TaskItem(id: "snoozed", title: "s", folderId: "inbox", due: today, state: .snoozed),
+        ]
+        let result = Set(TaskFilter.todayAndOverdue(in: tasks, clock: clock).map(\.id))
+        #expect(result == ["today", "overdue"])
+    }
+
+    @Test func focusTasksAreSortedByScoreDescending() throws {
+        let model = try makeModel()
+        let scores = model.focusTasks.map { model.score(for: $0) }
+        #expect(scores == scores.sorted(by: >))
+        #expect(model.focusTasks.allSatisfy { (model.clock.daysUntil($0.due) ?? 1) <= 0 })
+    }
+
+    @Test func createTodayTaskAppearsInFocusList() throws {
+        let model = try makeModel()
+        model.createTodayTask(title: "Focus thing")
+        let created = try #require(model.tasks.first { $0.title == "Focus thing" })
+        #expect(model.clock.daysUntil(created.due) == 0)
+        #expect(model.focusTasks.contains { $0.id == created.id })
+    }
+
+    @Test func focusModeDefaultsOffAndPersists() throws {
+        let defaults = throwawayDefaults()
+        let store = try TaskStore(url: tempDBURL(), clock: TaskClock(now: referenceDate))
+        let model = AppModel(store: store, clock: TaskClock(now: referenceDate), defaults: defaults)
+        #expect(model.isFocusMode == false) // first run → full mode
+        model.isFocusMode = true
+        let reopened = AppModel(store: store, clock: TaskClock(now: referenceDate), defaults: defaults)
+        #expect(reopened.isFocusMode == true) // remembered across restarts
+    }
 }
 
 /// An isolated UserDefaults so tests don't read/write the app's real preferences.

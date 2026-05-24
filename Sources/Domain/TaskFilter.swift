@@ -52,6 +52,12 @@ enum TaskFilter {
         live(tasks).filter { $0.folderId == folderId }
     }
 
+    /// Live tasks due today or overdue — the Focus-mode set. Tasks with no due date
+    /// (daysUntil == nil) are excluded.
+    static func todayAndOverdue(in tasks: [TaskItem], clock: TaskClock = TaskClock()) -> [TaskItem] {
+        live(tasks).filter { (clock.daysUntil($0.due) ?? 1) <= 0 }
+    }
+
     /// Sidebar badge count for a smart view. "Top" caps at 5 (the Top-5 band);
     /// every other view reports the size of its filtered set.
     static func badgeCount(

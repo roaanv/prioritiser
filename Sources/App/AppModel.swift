@@ -42,6 +42,11 @@ final class AppModel {
     }
     /// When set (via the matrix), the folder list is narrowed to this quadrant.
     var quadrantFilter: EisenhowerQuadrant?
+    /// Focus ("Today") mode vs the full app. Persisted so the app reopens in the
+    /// mode it was last left in.
+    var isFocusMode: Bool {
+        didSet { defaults.set(isFocusMode, forKey: Keys.focusMode) }
+    }
 
     let clock: TaskClock
     let weights = PriorityWeights.default
@@ -54,6 +59,7 @@ final class AppModel {
         static let selectedTask = "ui.selectedTaskID"
         static let expanded = "ui.expandedFolders"
         static let includeSubprojects = "ui.includeSubprojects"
+        static let focusMode = "ui.focusMode"
     }
 
     init(store: TaskStore, clock: TaskClock = TaskClock(), defaults: UserDefaults = .standard) {
@@ -67,6 +73,7 @@ final class AppModel {
         // Default to showing sub-projects (the list's pre-existing behavior).
         self.includeSubprojects = defaults.object(forKey: Keys.includeSubprojects) as? Bool ?? true
         self.quadrantFilter = nil
+        self.isFocusMode = defaults.bool(forKey: Keys.focusMode) // default: full mode
 
         // Restore expanded folders (default: top-level folders open).
         if let saved = defaults.array(forKey: Keys.expanded) as? [String] {
@@ -157,6 +164,12 @@ final class AppModel {
     }
 
     var isSearching: Bool { !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// Today's + overdue tasks, ranked by priority — the Focus-mode list.
+    var focusTasks: [TaskItem] {
+        TaskFilter.todayAndOverdue(in: tasks, clock: clock)
+            .sorted { score(for: $0) > score(for: $1) }
+    }
 
     func toggleQuadrantFilter(_ quadrant: EisenhowerQuadrant) {
         quadrantFilter = (quadrantFilter == quadrant) ? nil : quadrant
@@ -271,6 +284,16 @@ final class AppModel {
         store.appendActivity(ActivityEvent(taskId: task.id, kind: .created, timestamp: task.createdAt))
         tasks.insert(task, at: 0)
         selectOnly(task.id)
+    }
+
+    /// Create a task due today — Focus mode's quick-add, so new items land in the list.
+    func createTodayTask(title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var parsed = ParsedQuickAdd()
+        parsed.title = trimmed
+        parsed.due = clock.today
+        createTask(from: parsed)
     }
 
     /// Persist an edited task, reflect it in memory, and log notable changes.

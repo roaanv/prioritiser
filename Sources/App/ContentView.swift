@@ -16,6 +16,19 @@ struct ContentView: View {
     @State private var showTweaks = false
 
     var body: some View {
+        Group {
+            if model.isFocusMode {
+                FocusModeView()
+            } else {
+                fullView
+            }
+        }
+        .tint(accent.color)
+        .preferredColorScheme(appearance.colorScheme)
+        .background(WindowConfigurator(isFocusMode: model.isFocusMode))
+    }
+
+    private var fullView: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
@@ -30,11 +43,16 @@ struct ContentView: View {
             .navigationSplitViewColumnWidth(min: 300, ideal: 340, max: 440)
         }
         .navigationSplitViewStyle(.balanced)
-        .tint(accent.color)
-        .preferredColorScheme(appearance.colorScheme)
         // Support Dynamic Type, clamped so the dense 3-pane layout stays usable.
         .dynamicTypeSize(.xSmall ... .accessibility1)
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { model.isFocusMode = true } label: {
+                    Image(systemName: "moon")
+                }
+                .help("Focus mode — Today only (⌘⇧F)")
+                .accessibilityLabel("Focus mode")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showTweaks.toggle()

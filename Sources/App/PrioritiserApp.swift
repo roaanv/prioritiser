@@ -32,7 +32,8 @@ struct PrioritiserApp: App {
             ContentView()
                 .environment(model)
                 .environment(capture)
-                .frame(minWidth: 900, minHeight: 560)
+                // Per-mode min/max + size are managed by WindowConfigurator (Focus is
+                // capped narrow with a lower minimum; Full keeps the wide minimum).
         }
         .windowToolbarStyle(.unified)
         .commands {
@@ -43,6 +44,12 @@ struct PrioritiserApp: App {
             CommandGroup(after: .textEditing) {
                 Button("Find") { model.focusSearchToken += 1 }
                     .keyboardShortcut("f", modifiers: .command)
+            }
+            CommandGroup(after: .sidebar) {
+                Button(model.isFocusMode ? "Exit Focus Mode" : "Enter Focus Mode") {
+                    model.isFocusMode.toggle()
+                }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
             }
         }
 

@@ -5,6 +5,24 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — Focus ("Today") mode
+- A slimmed-down second operating mode showing only **today's and overdue** tasks as
+  collapsible cards. Each card edits the **title** and **description** inline, lets you
+  check the task off, and expands/collapses its description; a minimal quick-add at the
+  top files new tasks as **due today**. No sidebar / detail / matrix / chrome — just the
+  day's list, ranked by priority, to keep a Today focus without distraction.
+- Toggle between Focus and the full app from the toolbar (moon icon), the **View menu**,
+  or **⌘⇧F**. The chosen mode is **persisted**, so the app reopens in the mode you left.
+- **Overdue cards show their due date** (a red calendar chip) so you know how stale they are.
+- **Read-only attributes** on each card — priority **Score**, **Impact**, **Priority**, and
+  **Effort** — for guidance on what to tackle first (the list is already score-ranked).
+- **Focus and Full have independent, remembered window frames — position *and* size.**
+  Focus can live top-left while Full sits bottom-right; switching restores each mode's own
+  frame. Focus is capped narrow with a lower minimum (stays slim, can't be dragged below
+  it); Full keeps the wide minimum and is freely resizable (`WindowConfigurator`).
+- New `FocusModeView` + `WindowConfigurator`; `AppModel.isFocusMode` (persisted) /
+  `focusTasks` / `createTodayTask`; `TaskFilter.todayAndOverdue`. Tests (**74 tests**).
+
 ### Added — value picker for i:/p: in quick-add
 - Typing `i:` or `p:` now shows a **High / Medium / Low** dropdown (the only valid
   values) — ↑/↓ + Enter/Tab or click fills it in (e.g. → `p:h`), so an invalid entry

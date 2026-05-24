@@ -51,6 +51,9 @@ private struct DetailContent: View {
     /// Local editing buffer for notes (persisted on change), kept stable across the
     /// re-renders that editing triggers. Reset by the parent's `.id(task.id)`.
     @State private var notesDraft = ""
+    /// Editing buffer for the title (persisted on change; empty input is ignored so
+    /// a task always keeps a title). Reset per task by the parent's `.id(task.id)`.
+    @State private var titleDraft = ""
 
     /// Common effort presets offered in the effort menu (minutes).
     private let effortPresets = [5, 10, 15, 30, 45, 60, 120, 240, 480, 960, 1440]
@@ -75,7 +78,10 @@ private struct DetailContent: View {
                 .padding(.bottom, 28)
             }
         }
-        .onAppear { notesDraft = task.notes ?? "" }
+        .onAppear {
+            notesDraft = task.notes ?? ""
+            titleDraft = task.title
+        }
     }
 
     // MARK: - Header
@@ -109,10 +115,16 @@ private struct DetailContent: View {
         HStack(alignment: .top, spacing: 12) {
             CompletionToggle(task: task) { model.toggleDone(task) }
                 .padding(.top, 3)
-            Text(task.title)
+            TextField("Task title", text: $titleDraft)
+                .textFieldStyle(.plain)
                 .appFont(19, weight: .semibold, relativeTo: .title2)
                 .foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
+                .onChange(of: titleDraft) { _, new in
+                    let trimmed = new.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty, trimmed != task.title {
+                        setField { $0.title = trimmed }
+                    }
+                }
         }
     }
 

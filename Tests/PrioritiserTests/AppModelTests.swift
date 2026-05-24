@@ -175,6 +175,16 @@ struct AppModelTests {
         #expect(model.tasks.first { $0.title == "Plan the thing" }?.folderId == folder.id)
     }
 
+    @Test func updatingTitlePersists() throws {
+        let store = try TaskStore(url: tempDBURL(), clock: TaskClock(now: referenceDate))
+        let model = AppModel(store: store, clock: TaskClock(now: referenceDate), defaults: throwawayDefaults())
+        var task = try #require(model.tasks.first { $0.id == "t6" })
+        task.title = "Renamed task"
+        model.update(task)
+        #expect(model.tasks.first { $0.id == "t6" }?.title == "Renamed task")
+        #expect(store.loadTasks().first { $0.id == "t6" }?.title == "Renamed task") // round-trips to disk
+    }
+
     // MARK: - Deletion
 
     @Test func deleteTaskRemovesItFromMemoryAndStore() throws {

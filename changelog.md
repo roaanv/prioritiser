@@ -5,6 +5,11 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — editable task title
+- The task title in the detail pane is now an inline editable field (it was static
+  text). Edits persist as you type, mirroring the notes editor; empty input is ignored
+  so a task always keeps a title, and the change reflects live in the task list.
+
 ### Added — global quick-capture hotkey + menu-bar item
 - A **system-wide, configurable** hotkey (default **⌃⌥⌘T**) pops a floating capture
   box from any app — type a task (the full `#project due: t: i: p:` grammar works),

@@ -9,7 +9,7 @@ DERIVED      := build
 DESTINATION  := platform=macOS
 APP          := $(DERIVED)/Build/Products/$(CONFIG)/Prioritiser.app
 # Release pipeline output (universal .app, signed + notarized in CI).
-RELEASE_APP  := $(DERIVED)/Release/$(PRODUCT_NAME).app
+RELEASE_APP  := $(DERIVED)/Build/Products/Release/$(PRODUCT_NAME).app
 ENTITLEMENTS := Prioritiser.entitlements
 
 .DEFAULT_GOAL := build
@@ -88,11 +88,10 @@ release: $(PROJECT) ## Build an unsigned universal (arm64+x86_64) Release .app
 		-project $(PROJECT) \
 		-scheme $(SCHEME) \
 		-configuration Release \
+		-derivedDataPath $(DERIVED) \
 		ARCHS="arm64 x86_64" \
 		ONLY_ACTIVE_ARCH=NO \
-		CODE_SIGNING_ALLOWED=NO \
-		SYMROOT=$(CURDIR)/$(DERIVED) \
-		CONFIGURATION_BUILD_DIR=$(CURDIR)/$(DERIVED)/Release $(PRETTY)
+		CODE_SIGNING_ALLOWED=NO $(PRETTY)
 	@echo "Built $(RELEASE_APP)"
 
 .PHONY: sign

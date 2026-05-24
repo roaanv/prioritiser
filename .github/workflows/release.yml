@@ -36,6 +36,9 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
 
+      - name: Setup project
+        run: make setup
+
       - name: Run tests
         run: make test
 

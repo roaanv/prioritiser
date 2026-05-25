@@ -22,6 +22,22 @@ struct DragPayloadTests {
         #expect(conformsToPublicData(folderDeclaration))
     }
 
+    @Test func taskPayloadRoundTripsThroughStringFallback() {
+        let payload = DraggedTaskPayload(taskID: "task-123")
+
+        #expect(payload.dragString == "io.0112.Prioritiser.drag.task:task-123")
+        #expect(DraggedTaskPayload.taskID(from: payload.dragString) == "task-123")
+        #expect(DraggedTaskPayload.taskID(from: "plain text") == nil)
+    }
+
+    @Test func folderPayloadRoundTripsThroughStringFallback() {
+        let payload = DraggedFolderPayload(folderID: "folder-123")
+
+        #expect(payload.dragString == "io.0112.Prioritiser.drag.folder:folder-123")
+        #expect(DraggedFolderPayload.folderID(from: payload.dragString) == "folder-123")
+        #expect(DraggedFolderPayload.folderID(from: "plain text") == nil)
+    }
+
     private func declaration(_ identifier: String, in declarations: [[String: Any]]) -> [String: Any]? {
         declarations.first { $0["UTTypeIdentifier"] as? String == identifier }
     }

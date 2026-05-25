@@ -69,8 +69,10 @@ struct SidebarView: View {
         .background(rootTargeted ? Color.accentColor.opacity(0.15) : .clear,
                     in: RoundedRectangle(cornerRadius: 5))
         // Drop a folder here to move it to the top level (out of its parent).
-        .dropDestination(for: DraggedFolderPayload.self) { items, _ in
-            if let dragged = items.first { model.reparentFolder(dragged.folderID, under: nil) }
+        .dropDestination(for: String.self) { items, _ in
+            guard let raw = items.first,
+                  let draggedID = DraggedFolderPayload.folderID(from: raw) else { return false }
+            model.reparentFolder(draggedID, under: nil)
             rootTargeted = false
             return true
         } isTargeted: { rootTargeted = $0 }
@@ -143,23 +145,22 @@ struct SidebarView: View {
                 Button("Delete", role: .destructive) { model.deleteFolder(id: folder.id) }
             }
         }
-        .draggable(DraggedFolderPayload(folderID: folder.id))
-        // Drop another folder here to move it into this one (re-parent).
-        .dropDestination(for: DraggedFolderPayload.self) { items, _ in
-            if let dragged = items.first { model.reparentFolder(dragged.folderID, under: folder.id) }
-            dropTargetID = nil
-            return true
-        } isTargeted: { targeted in
-            dropTargetID = targeted ? folder.id : (dropTargetID == folder.id ? nil : dropTargetID)
-        }
-        // Drop task rows here to file them into this folder/project.
-        .dropDestination(for: DraggedTaskPayload.self) { items, _ in
-            if let dragged = items.first {
-                let ids = model.taskIDsToMove(forDraggedTaskID: dragged.taskID)
-                model.moveTasks(ids, toFolder: folder.id)
+        .draggable(DraggedFolderPayload(folderID: folder.id).dragString)
+        // Drop a folder here to re-parent it, or task rows to file them into this project.
+        .dropDestination(for: String.self) { items, _ in
+            guard let raw = items.first else { return false }
+            if let draggedFolderID = DraggedFolderPayload.folderID(from: raw) {
+                model.reparentFolder(draggedFolderID, under: folder.id)
+                dropTargetID = nil
+                return true
             }
-            dropTargetID = nil
-            return true
+            if let draggedTaskID = DraggedTaskPayload.taskID(from: raw) {
+                let ids = model.taskIDsToMove(forDraggedTaskID: draggedTaskID)
+                model.moveTasks(ids, toFolder: folder.id)
+                dropTargetID = nil
+                return true
+            }
+            return false
         } isTargeted: { targeted in
             dropTargetID = targeted ? folder.id : (dropTargetID == folder.id ? nil : dropTargetID)
         }
@@ -172,8 +173,10 @@ struct SidebarView: View {
         Color.clear
             .frame(height: 9)
             .contentShape(Rectangle())
-            .dropDestination(for: DraggedFolderPayload.self) { items, _ in
-                if let dragged = items.first { model.moveFolder(dragged.folderID, before: folderID) }
+            .dropDestination(for: String.self) { items, _ in
+                guard let raw = items.first,
+                      let draggedID = DraggedFolderPayload.folderID(from: raw) else { return false }
+                model.moveFolder(draggedID, before: folderID)
                 insertTargetID = nil
                 return true
             } isTargeted: { targeted in

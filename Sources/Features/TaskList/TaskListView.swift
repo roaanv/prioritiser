@@ -310,7 +310,7 @@ struct TaskListView: View {
         VStack(spacing: 4) {
             ForEach(Array(top.enumerated()), id: \.element.id) { index, task in
                 TaskRowView(task: task, rank: vizMode == .cards ? index + 1 : nil, vizMode: vizMode)
-                    .draggable(DraggedTaskPayload(taskID: task.id))
+                    .draggable(DraggedTaskPayload(taskID: task.id).dragString)
                     .id(task.id)
             }
         }
@@ -370,11 +370,13 @@ struct TaskListView: View {
     private func row(_ task: TaskItem, vizMode: PriorityVizMode, reorderable: Bool, taskDraggable: Bool) -> some View {
         if taskDraggable {
             let base = TaskRowView(task: task, vizMode: vizMode)
-                .draggable(DraggedTaskPayload(taskID: task.id))
+                .draggable(DraggedTaskPayload(taskID: task.id).dragString)
             if reorderable {
                 base
-                    .dropDestination(for: DraggedTaskPayload.self) { items, _ in
-                        if let dragged = items.first { model.moveTask(dragged.taskID, before: task.id) }
+                    .dropDestination(for: String.self) { items, _ in
+                        guard let raw = items.first,
+                              let draggedID = DraggedTaskPayload.taskID(from: raw) else { return false }
+                        model.moveTask(draggedID, before: task.id)
                         return true
                     }
             } else {

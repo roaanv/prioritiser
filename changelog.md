@@ -5,6 +5,10 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — task drag-and-drop between projects
+- Live tasks can now be dragged from the task list onto sidebar projects, including Inbox, to re-file them without leaving the current view.
+- Dragging one selected task moves the whole selected set; dragging an unselected task moves only that task. Completed tasks are not draggable.
+
 ### Added — Completed view
 - A new **Completed** sidebar view lists done tasks **grouped by the day you completed
   them** (Today / Yesterday / date), most recent first. Checking a task off files it here;

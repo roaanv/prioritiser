@@ -69,8 +69,8 @@ struct SidebarView: View {
         .background(rootTargeted ? Color.accentColor.opacity(0.15) : .clear,
                     in: RoundedRectangle(cornerRadius: 5))
         // Drop a folder here to move it to the top level (out of its parent).
-        .dropDestination(for: String.self) { items, _ in
-            if let dragged = items.first { model.reparentFolder(dragged, under: nil) }
+        .dropDestination(for: DraggedFolderPayload.self) { items, _ in
+            if let dragged = items.first { model.reparentFolder(dragged.folderID, under: nil) }
             rootTargeted = false
             return true
         } isTargeted: { rootTargeted = $0 }
@@ -143,10 +143,21 @@ struct SidebarView: View {
                 Button("Delete", role: .destructive) { model.deleteFolder(id: folder.id) }
             }
         }
-        .draggable(folder.id)
+        .draggable(DraggedFolderPayload(folderID: folder.id))
         // Drop another folder here to move it into this one (re-parent).
-        .dropDestination(for: String.self) { items, _ in
-            if let dragged = items.first { model.reparentFolder(dragged, under: folder.id) }
+        .dropDestination(for: DraggedFolderPayload.self) { items, _ in
+            if let dragged = items.first { model.reparentFolder(dragged.folderID, under: folder.id) }
+            dropTargetID = nil
+            return true
+        } isTargeted: { targeted in
+            dropTargetID = targeted ? folder.id : (dropTargetID == folder.id ? nil : dropTargetID)
+        }
+        // Drop task rows here to file them into this folder/project.
+        .dropDestination(for: DraggedTaskPayload.self) { items, _ in
+            if let dragged = items.first {
+                let ids = model.taskIDsToMove(forDraggedTaskID: dragged.taskID)
+                model.moveTasks(ids, toFolder: folder.id)
+            }
             dropTargetID = nil
             return true
         } isTargeted: { targeted in
@@ -161,8 +172,8 @@ struct SidebarView: View {
         Color.clear
             .frame(height: 9)
             .contentShape(Rectangle())
-            .dropDestination(for: String.self) { items, _ in
-                if let dragged = items.first { model.moveFolder(dragged, before: folderID) }
+            .dropDestination(for: DraggedFolderPayload.self) { items, _ in
+                if let dragged = items.first { model.moveFolder(dragged.folderID, before: folderID) }
                 insertTargetID = nil
                 return true
             } isTargeted: { targeted in

@@ -44,6 +44,15 @@ targets:
         LSMinimumSystemVersion: "$(MACOSX_DEPLOYMENT_TARGET)"
         LSApplicationCategoryType: public.app-category.productivity
         NSHumanReadableCopyright: ""
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: io.0112.Prioritiser.drag.task
+            UTTypeDescription: Prioritiser Task Drag Payload
+            UTTypeConformsTo:
+              - public.data
+          - UTTypeIdentifier: io.0112.Prioritiser.drag.folder
+            UTTypeDescription: Prioritiser Folder Drag Payload
+            UTTypeConformsTo:
+              - public.data
         # Standard windowed app (not a background agent).
         LSUIElement: false
     scheme:

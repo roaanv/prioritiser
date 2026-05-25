@@ -28,5 +28,28 @@
 	<false/>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Prioritiser Task Drag Payload</string>
+			<key>UTTypeIdentifier</key>
+			<string>io.0112.Prioritiser.drag.task</string>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Prioritiser Folder Drag Payload</string>
+			<key>UTTypeIdentifier</key>
+			<string>io.0112.Prioritiser.drag.folder</string>
+		</dict>
+	</array>
 </dict>
 </plist>

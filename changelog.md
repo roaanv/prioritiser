@@ -5,6 +5,16 @@ follows [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
 ## [Unreleased]
 
+### Added — full autocomplete in the global quick-capture hotkey
+- The floating capture panel (global shortcut key) now shows the same **`#project` folder
+  autocomplete dropdown** as the in-app add bar and ⌘N Spotlight — type a `#tag` and pick a
+  project with ↑/↓ + Enter/Tab/click. The `i:`/`p:` impact/priority value picker (already
+  present) is gated behind it so only one list shows at a time, matching the other surfaces.
+- Committing a task whose `#project` doesn't exist now prompts **"Create project?"** instead of
+  silently filing it to Inbox, bringing the shortcut capture in line with the in-app surfaces.
+- Reuses the existing shared `FolderSuggestionList` / `QuickAddAutocomplete` / `PrefixParser`
+  machinery — no new logic, no new tests needed (**86 tests** still pass).
+
 ### Added — task drag-and-drop between projects
 - Live tasks can now be dragged from the task list onto sidebar projects, including Inbox, to re-file them without leaving the current view.
 - Dragging one selected task moves the whole selected set; dragging an unselected task moves only that task. Completed tasks are not draggable.

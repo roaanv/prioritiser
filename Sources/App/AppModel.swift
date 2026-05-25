@@ -414,6 +414,31 @@ final class AppModel {
         }
     }
 
+    /// Resolve the effective task set for a drag that started from `draggedTaskID`.
+    /// Dragging any selected row moves the whole selected set; dragging an
+    /// unselected row moves just that row. Stale IDs are ignored.
+    func taskIDsToMove(forDraggedTaskID draggedTaskID: String) -> Set<String> {
+        let existing = Set(tasks.map(\.id))
+        guard existing.contains(draggedTaskID) else { return [] }
+        if selectedTaskIDs.contains(draggedTaskID) {
+            return selectedTaskIDs.intersection(existing)
+        }
+        return [draggedTaskID]
+    }
+
+    /// Move existing tasks into `folderID` without changing task order or sidebar
+    /// selection. Persistence flows through `update(_:)` so folder-change activity
+    /// is logged consistently with detail-pane edits.
+    func moveTasks(_ ids: Set<String>, toFolder folderID: String) {
+        guard !ids.isEmpty, folder(id: folderID) != nil else { return }
+        for id in ids {
+            guard let task = tasks.first(where: { $0.id == id }), task.folderId != folderID else { continue }
+            var moved = task
+            moved.folderId = folderID
+            update(moved)
+        }
+    }
+
     /// Append activity for state / due / folder changes (done transitions are
     /// logged by `toggleDone`, so they're skipped here).
     private func logChanges(from old: TaskItem, to new: TaskItem) {

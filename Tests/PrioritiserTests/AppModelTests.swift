@@ -53,6 +53,51 @@ struct AppModelTests {
         #expect(model.tasks.first?.id == third)
     }
 
+    @Test func taskIDsToMoveUsesWholeSelectionWhenDraggingSelectedTask() throws {
+        let model = try makeModel()
+        model.selectedTaskIDs = ["t6", "t7", "missing"]
+
+        #expect(model.taskIDsToMove(forDraggedTaskID: "t6") == ["t6", "t7"])
+    }
+
+    @Test func taskIDsToMoveUsesOnlyDraggedTaskWhenDraggingUnselectedTask() throws {
+        let model = try makeModel()
+        model.selectedTaskIDs = ["t6", "t7"]
+
+        #expect(model.taskIDsToMove(forDraggedTaskID: "t8") == ["t8"])
+    }
+
+    @Test func moveTasksToFolderMovesSelectedTasksAndPreservesOrder() throws {
+        let model = try makeModel()
+        let originalOrder = model.tasks.map(\.id)
+        let moving: Set<String> = ["t6", "t7"]
+
+        model.moveTasks(moving, toFolder: "reading")
+
+        #expect(model.tasks.map(\.id) == originalOrder)
+        #expect(model.tasks.first { $0.id == "t6" }?.folderId == "reading")
+        #expect(model.tasks.first { $0.id == "t7" }?.folderId == "reading")
+    }
+
+    @Test func moveTasksToFolderLogsFolderChangedActivity() throws {
+        let model = try makeModel()
+
+        model.moveTasks(["t6"], toFolder: "reading")
+
+        #expect(model.activity(for: "t6").contains { event in
+            event.kind == .folderChanged && event.detail == "Reading"
+        })
+    }
+
+    @Test func moveTasksToUnknownFolderDoesNothing() throws {
+        let model = try makeModel()
+        let before = model.tasks
+
+        model.moveTasks(["t6"], toFolder: "not-a-folder")
+
+        #expect(model.tasks == before)
+    }
+
     @Test func wakesPastDueSnoozedTaskOnLaunch() throws {
         let store = try TaskStore(url: tempDBURL(), clock: TaskClock(now: referenceDate))
         let pastDate = Calendar.current.date(from: DateComponents(year: 2026, month: 5, day: 20))!

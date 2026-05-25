@@ -272,7 +272,7 @@ struct TaskListView: View {
             let groups = completedGroups(done)
             ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
                 band(label: group.label, trailing: "\(group.tasks.count)")
-                flatRows(group.tasks, vizMode: .cards, reorderable: false)
+                flatRows(group.tasks, vizMode: .cards, reorderable: false, taskDraggable: false)
             }
         }
     }
@@ -310,6 +310,7 @@ struct TaskListView: View {
         VStack(spacing: 4) {
             ForEach(Array(top.enumerated()), id: \.element.id) { index, task in
                 TaskRowView(task: task, rank: vizMode == .cards ? index + 1 : nil, vizMode: vizMode)
+                    .draggable(DraggedTaskPayload(taskID: task.id))
                     .id(task.id)
             }
         }
@@ -353,27 +354,32 @@ struct TaskListView: View {
             .padding(.vertical, 60)
     }
 
-    private func flatRows(_ tasks: [TaskItem], vizMode: PriorityVizMode, reorderable: Bool) -> some View {
+    private func flatRows(_ tasks: [TaskItem], vizMode: PriorityVizMode, reorderable: Bool, taskDraggable: Bool = true) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
                 if index > 0 {
                     Divider().opacity(0.4).padding(.horizontal, 14)
                 }
-                row(task, vizMode: vizMode, reorderable: reorderable)
+                row(task, vizMode: vizMode, reorderable: reorderable, taskDraggable: taskDraggable)
                     .id(task.id)
             }
         }
     }
 
     @ViewBuilder
-    private func row(_ task: TaskItem, vizMode: PriorityVizMode, reorderable: Bool) -> some View {
-        if reorderable {
-            TaskRowView(task: task, vizMode: vizMode)
-                .draggable(task.id)
-                .dropDestination(for: String.self) { items, _ in
-                    if let dragged = items.first { model.moveTask(dragged, before: task.id) }
-                    return true
-                }
+    private func row(_ task: TaskItem, vizMode: PriorityVizMode, reorderable: Bool, taskDraggable: Bool) -> some View {
+        if taskDraggable {
+            let base = TaskRowView(task: task, vizMode: vizMode)
+                .draggable(DraggedTaskPayload(taskID: task.id))
+            if reorderable {
+                base
+                    .dropDestination(for: DraggedTaskPayload.self) { items, _ in
+                        if let dragged = items.first { model.moveTask(dragged.taskID, before: task.id) }
+                        return true
+                    }
+            } else {
+                base
+            }
         } else {
             TaskRowView(task: task, vizMode: vizMode)
         }

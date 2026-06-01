@@ -2,7 +2,7 @@
 // The always-on right inspector. Shows the inspected task's breadcrumb, title,
 // the big priority score with a per-component breakdown, editable fields
 // (folder/due/effort read-only; impact/priority/state via segmented controls),
-// notes (read-only this slice), and an activity list. Empty state when nothing
+// markdown-highlighted notes, and an activity list. Empty state when nothing
 // is selected.
 
 import SwiftUI
@@ -309,19 +309,8 @@ private struct DetailContent: View {
     private var notes: some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionLabel("Notes")
-            TextEditor(text: $notesDraft)
-                .appFont(12.5)
-                .foregroundStyle(.secondary)
-                .scrollContentBackground(.hidden)
+            MarkdownNotesEditor(text: $notesDraft, placeholder: "Add notes…", minHeight: 56, fontSize: 12.5)
                 .frame(minHeight: 56)
-                .overlay(alignment: .topLeading) {
-                    if notesDraft.isEmpty {
-                        Text("Add notes…")
-                            .font(.system(size: 12.5)).italic().foregroundStyle(.tertiary)
-                            .padding(.top, 1)
-                            .allowsHitTesting(false)
-                    }
-                }
                 .onChange(of: notesDraft) { _, new in
                     setField { $0.notes = new.isEmpty ? nil : new }
                 }

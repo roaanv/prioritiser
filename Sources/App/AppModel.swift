@@ -266,7 +266,7 @@ final class AppModel {
     // MARK: - Mutations
 
     /// Create a task from parsed quick-add input.
-    func createTask(from parsed: ParsedQuickAdd) {
+    func createTask(from parsed: ParsedQuickAdd, notes: String? = nil) {
         guard !parsed.title.isEmpty else { return }
         let task = TaskItem(
             title: parsed.title,
@@ -276,6 +276,7 @@ final class AppModel {
             impact: parsed.impact ?? .medium,
             priority: parsed.priority ?? .medium,
             state: .open,
+            notes: notes,
             createdAt: clock.now
         )
         // Negative, ever-decreasing order so new tasks prepend in "All".
@@ -394,12 +395,12 @@ final class AppModel {
 
     /// Create the task, first creating a new top-level folder for an unknown
     /// `#slug` and filing the task directly into it.
-    func createFolderAndTask(from parsed: ParsedQuickAdd) {
+    func createFolderAndTask(from parsed: ParsedQuickAdd, notes: String? = nil) {
         var parsed = parsed
         if let slug = parsed.folderSlug, knownFolder(forSlug: slug) == nil {
             parsed.folderSlug = addFolder(name: slug, parentId: nil) // point at the real new id
         }
-        createTask(from: parsed)
+        createTask(from: parsed, notes: notes)
     }
 
     /// Move `draggedID` to just before `targetID` and persist the new ordering.

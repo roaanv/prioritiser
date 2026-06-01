@@ -12,6 +12,7 @@ struct QuickCaptureView: View {
     var onDismiss: () -> Void
 
     @State private var text = ""
+    @State private var notes = ""
     @FocusState private var focused: Bool
     @State private var highlighted = 0
     @State private var suppressed = false
@@ -50,6 +51,8 @@ struct QuickCaptureView: View {
                     .onKeyPress(.tab) { acceptIfSuggesting() }
                     .onKeyPress(.escape) { handleEscape() }
             }
+            MarkdownNotesEditor(text: $notes, placeholder: "Notes support **markdown**…", minHeight: 64, fontSize: 12.5, onEscape: discardAndDismiss)
+                .frame(minHeight: 64)
             if showSuggestions {
                 FolderSuggestionList(folders: suggestions, allFolders: model.folders,
                                      highlighted: highlighted, onPick: complete)
@@ -98,13 +101,10 @@ struct QuickCaptureView: View {
         return .ignored
     }
 
-    /// Esc: first dismiss an open suggestion dropdown, otherwise close the capture panel.
+    /// Esc discards the whole draft and closes the capture panel, even if a suggestion
+    /// dropdown is open. Quick capture is transient and must behave like Cancel.
     private func handleEscape() -> KeyPress.Result {
-        if isSuggesting {
-            suppressed = true
-            return .handled
-        }
-        onDismiss()
+        discardAndDismiss()
         return .handled
     }
 
@@ -136,18 +136,36 @@ struct QuickCaptureView: View {
         if let slug = parsed.folderSlug, model.knownFolder(forSlug: slug) == nil {
             pendingParsed = parsed
         } else {
-            model.createTask(from: parsed)
-            text = ""
+            model.createTask(from: parsed, notes: cleanedNotes)
+            resetDraft()
             onDismiss()
         }
     }
 
     private func confirmCreate() {
         if let parsed = pendingParsed {
-            model.createFolderAndTask(from: parsed)
-            text = ""
+            model.createFolderAndTask(from: parsed, notes: cleanedNotes)
+            resetDraft()
             onDismiss()
         }
         pendingParsed = nil
+    }
+
+    private var cleanedNotes: String? {
+        let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : notes
+    }
+
+    private func resetDraft() {
+        text = ""
+        notes = ""
+        pendingParsed = nil
+        suppressed = false
+        highlighted = 0
+    }
+
+    private func discardAndDismiss() {
+        resetDraft()
+        onDismiss()
     }
 }

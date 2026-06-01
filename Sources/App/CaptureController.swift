@@ -21,6 +21,7 @@ final class CaptureController {
     @ObservationIgnored private let model: AppModel
     @ObservationIgnored private let hotKey = GlobalHotKey()
     @ObservationIgnored private var panel: NSPanel?
+    @ObservationIgnored private var visibilitySnapshot: AppVisibilitySnapshot?
 
     init(model: AppModel) {
         self.model = model
@@ -41,6 +42,9 @@ final class CaptureController {
     func showCapture() {
         let panel = panel ?? makePanel()
         self.panel = panel
+        if !panel.isVisible {
+            visibilitySnapshot = AppVisibilitySnapshot.capture(excluding: panel)
+        }
         NSApp.activate(ignoringOtherApps: true)
         if let screen = NSScreen.main {
             let visible = screen.visibleFrame
@@ -54,6 +58,8 @@ final class CaptureController {
 
     func hideCapture() {
         panel?.orderOut(nil)
+        visibilitySnapshot?.restore()
+        visibilitySnapshot = nil
     }
 
     private func makePanel() -> NSPanel {
@@ -73,6 +79,85 @@ final class CaptureController {
         panel.hasShadow = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         return panel
+    }
+}
+
+enum WindowVisibilityRestoration: Equatable {
+    case none
+    case miniaturize
+    case orderOut
+    case deminiaturize
+}
+
+struct WindowVisibilityState: Equatable {
+    let wasVisible: Bool
+    let wasMiniaturized: Bool
+
+    func restoration(currentVisible: Bool, currentMiniaturized: Bool) -> WindowVisibilityRestoration {
+        if wasMiniaturized {
+            return currentMiniaturized ? .none : .miniaturize
+        }
+        if !wasVisible {
+            return currentVisible ? .orderOut : .none
+        }
+        return currentMiniaturized ? .deminiaturize : .none
+    }
+}
+
+/// Captures the app's window visibility before the transient quick-capture panel
+/// appears, then restores it after the panel closes. Showing the panel must activate
+/// this process so the text field can become key; restoration keeps that activation
+/// from accidentally unminimizing or showing the main app window.
+@MainActor
+struct AppVisibilitySnapshot {
+    private struct WindowState {
+        weak var window: NSWindow?
+        let visibility: WindowVisibilityState
+    }
+
+    private let wasHidden: Bool
+    private let states: [WindowState]
+
+    static func capture(excluding excludedWindow: NSWindow?) -> AppVisibilitySnapshot {
+        AppVisibilitySnapshot(
+            wasHidden: NSApp.isHidden,
+            states: NSApp.windows
+                .filter { window in
+                    window !== excludedWindow
+                }
+                .map { window in
+                    WindowState(
+                        window: window,
+                        visibility: WindowVisibilityState(
+                            wasVisible: window.isVisible,
+                            wasMiniaturized: window.isMiniaturized
+                        )
+                    )
+                }
+        )
+    }
+
+    func restore() {
+        for state in states {
+            guard let window = state.window else { continue }
+            switch state.visibility.restoration(
+                currentVisible: window.isVisible,
+                currentMiniaturized: window.isMiniaturized
+            ) {
+            case .none:
+                break
+            case .miniaturize:
+                window.miniaturize(nil)
+            case .orderOut:
+                window.orderOut(nil)
+            case .deminiaturize:
+                window.deminiaturize(nil)
+            }
+        }
+
+        if wasHidden {
+            NSApp.hide(nil)
+        }
     }
 }
 

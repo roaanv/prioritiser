@@ -158,19 +158,8 @@ private struct FocusTaskCard: View {
             }
             metrics
             if expanded {
-                TextEditor(text: $notesDraft)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.secondary)
-                    .scrollContentBackground(.hidden)
+                MarkdownNotesEditor(text: $notesDraft, placeholder: "Add a description…", minHeight: 44, fontSize: 12.5)
                     .frame(minHeight: 44)
-                    .overlay(alignment: .topLeading) {
-                        if notesDraft.isEmpty {
-                            Text("Add a description…")
-                                .font(.system(size: 12.5)).italic()
-                                .foregroundStyle(.tertiary)
-                                .allowsHitTesting(false).padding(.top, 1)
-                        }
-                    }
                     .onChange(of: notesDraft) { _, new in
                         setField { $0.notes = new.isEmpty ? nil : new }
                     }

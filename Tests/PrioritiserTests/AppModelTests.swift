@@ -38,6 +38,17 @@ struct AppModelTests {
         #expect(model.activity(for: id).contains { $0.kind == .created })
     }
 
+    @Test func createTaskPersistsMarkdownNotes() throws {
+        let model = try makeModel()
+        model.createTask(
+            from: PrefixParser.parse("Write the docs #work", clock: model.clock),
+            notes: "**Important** context"
+        )
+
+        let task = try #require(model.tasks.first { $0.title == "Write the docs" })
+        #expect(task.notes == "**Important** context")
+    }
+
     @Test func completingLogsActivity() throws {
         let model = try makeModel()
         let task = try #require(model.tasks.first { $0.id == "t6" })

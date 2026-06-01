@@ -1,7 +1,8 @@
 // AppModel.swift
 // The observable root state: the loaded folders/tasks, the current sidebar
 // selection, the inspected task, and folder-expansion state. Owns the TaskStore
-// and is the single place mutations flow through (memory + persistence stay in sync).
+// and is the single place mutations flow through. View state is loaded at launch
+// and written back only when the app terminates.
 
 import Foundation
 import Observation
@@ -12,24 +13,19 @@ final class AppModel {
     private(set) var folders: [Folder]
     private(set) var tasks: [TaskItem]
 
-    // Sidebar state persists across launches (see didSet observers).
+    // Sidebar/window state is restored at launch and saved explicitly on app exit.
     var selection: Selection {
         didSet {
-            defaults.set(selection.persistedString, forKey: Keys.selection)
             quadrantFilter = nil // a quadrant filter is scoped to one project view
         }
     }
-    var selectedTaskID: String? {
-        didSet { defaults.set(selectedTaskID, forKey: Keys.selectedTask) }
-    }
+    var selectedTaskID: String?
     /// Multi-selection for bulk actions (delete). `selectedTaskID` is the primary /
     /// inspected task; this set always contains it when non-empty. Not persisted.
     var selectedTaskIDs: Set<String> = []
     /// Non-nil while a multi-delete confirmation is showing — the ids awaiting it.
     var pendingDeletion: Set<String>?
-    var expandedFolders: Set<String> {
-        didSet { defaults.set(Array(expandedFolders), forKey: Keys.expanded) }
-    }
+    var expandedFolders: Set<String>
     /// Set when the user invokes ⌘N; the Spotlight capture sheet observes this.
     var quickAddRequested = false
     /// Live search text from the sidebar; filters the visible task set.
@@ -37,16 +33,11 @@ final class AppModel {
     /// Bumped when ⌘F is pressed; the sidebar search field focuses on change.
     var focusSearchToken = 0
     /// Shared folder scope: include descendant projects in the list AND the matrix.
-    var includeSubprojects: Bool {
-        didSet { defaults.set(includeSubprojects, forKey: Keys.includeSubprojects) }
-    }
+    var includeSubprojects: Bool
     /// When set (via the matrix), the folder list is narrowed to this quadrant.
     var quadrantFilter: EisenhowerQuadrant?
-    /// Focus ("Today") mode vs the full app. Persisted so the app reopens in the
-    /// mode it was last left in.
-    var isFocusMode: Bool {
-        didSet { defaults.set(isFocusMode, forKey: Keys.focusMode) }
-    }
+    /// Focus ("Today") mode vs the full app.
+    var isFocusMode: Bool
 
     let clock: TaskClock
     let weights = PriorityWeights.default
@@ -101,6 +92,14 @@ final class AppModel {
         self.selectedTaskIDs = selectedTaskID.map { [$0] } ?? []
 
         wakeDueSnoozedTasks()
+    }
+
+    func saveUIState() {
+        defaults.set(selection.persistedString, forKey: Keys.selection)
+        defaults.set(selectedTaskID, forKey: Keys.selectedTask)
+        defaults.set(Array(expandedFolders), forKey: Keys.expanded)
+        defaults.set(includeSubprojects, forKey: Keys.includeSubprojects)
+        defaults.set(isFocusMode, forKey: Keys.focusMode)
     }
 
     private static func isValid(_ selection: Selection, in folders: [Folder]) -> Bool {

@@ -1,7 +1,6 @@
 // ContentView.swift
-// The three-pane shell: Sidebar · Task list · Detail. Uses a 3-column
-// NavigationSplitView (the native Mail-style layout) so the sidebar gets real
-// translucency and the columns resize like a standard macOS app. Appearance,
+// The main shell: focus mode or a dockable workspace. The full workspace keeps the
+// task list central and lets supporting panes dock left, right, or bottom.
 // accent, and priority-viz are user preferences (@AppStorage); a toolbar popover
 // exposes them (the Settings window mirrors the same controls).
 
@@ -12,7 +11,8 @@ struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("accent") private var accent: AppAccent = .blue
     @AppStorage("appearance") private var appearance: AppAppearance = .system
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @Binding var dockLayout: DockLayout
+    let windowFrames: WindowFrameStore
     @State private var showTweaks = false
 
     var body: some View {
@@ -25,24 +25,11 @@ struct ContentView: View {
         }
         .tint(accent.color)
         .preferredColorScheme(appearance.colorScheme)
-        .background(WindowConfigurator(isFocusMode: model.isFocusMode))
+        .background(WindowConfigurator(isFocusMode: model.isFocusMode, frameStore: windowFrames))
     }
 
     private var fullView: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView()
-                .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
-        } content: {
-            TaskListView()
-                .navigationSplitViewColumnWidth(min: 420, ideal: 560)
-        } detail: {
-            VStack(spacing: 0) {
-                DetailView()
-                ProjectMatrixView() // pinned below; shows for folder selections only
-            }
-            .navigationSplitViewColumnWidth(min: 300, ideal: 340, max: 440)
-        }
-        .navigationSplitViewStyle(.balanced)
+        DockWorkspaceView(layout: $dockLayout)
         // Support Dynamic Type, clamped so the dense 3-pane layout stays usable.
         .dynamicTypeSize(.xSmall ... .accessibility1)
         .toolbar {

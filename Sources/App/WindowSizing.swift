@@ -1,15 +1,71 @@
 // WindowSizing.swift
 // Gives Focus and Full modes independent window frames (position AND size) plus
-// per-mode min/max bounds. Each mode's frame is remembered (UserDefaults) and
-// restored when you switch to it — so Focus can live top-left while Full sits
-// bottom-right. Focus is capped narrow with a lower minimum so it stays slim;
-// Full keeps the wide minimum and is freely resizable.
+// per-mode min/max bounds. Frames are restored on launch and tracked in memory
+// while the app runs, but written to UserDefaults only during app termination.
 
 import SwiftUI
 import AppKit
 
+@MainActor
+final class WindowFrameStore {
+    private var focusFrame: NSRect?
+    private var fullFrame: NSRect?
+
+    init(focusFrame: NSRect? = nil, fullFrame: NSRect? = nil) {
+        self.focusFrame = Self.validFrame(focusFrame)
+        self.fullFrame = Self.validFrame(fullFrame)
+    }
+
+    static func load(from defaults: UserDefaults = .standard) -> WindowFrameStore {
+        WindowFrameStore(
+            focusFrame: rect(forKey: focusFrameKey, defaults: defaults),
+            fullFrame: rect(forKey: fullFrameKey, defaults: defaults)
+        )
+    }
+
+    func frame(focus: Bool) -> NSRect? {
+        focus ? focusFrame : fullFrame
+    }
+
+    func setFrame(_ frame: NSRect, focus: Bool) {
+        guard let frame = Self.validFrame(frame) else { return }
+        if focus {
+            focusFrame = frame
+        } else {
+            fullFrame = frame
+        }
+    }
+
+    func save(to defaults: UserDefaults = .standard) {
+        set(focusFrame, forKey: Self.focusFrameKey, defaults: defaults)
+        set(fullFrame, forKey: Self.fullFrameKey, defaults: defaults)
+    }
+
+    private func set(_ frame: NSRect?, forKey key: String, defaults: UserDefaults) {
+        if let frame {
+            defaults.set(NSStringFromRect(frame), forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    private static func rect(forKey key: String, defaults: UserDefaults) -> NSRect? {
+        guard let string = defaults.string(forKey: key) else { return nil }
+        return validFrame(NSRectFromString(string))
+    }
+
+    private static func validFrame(_ frame: NSRect?) -> NSRect? {
+        guard let frame, frame.width > 0, frame.height > 0 else { return nil }
+        return frame
+    }
+
+    private static let focusFrameKey = "win.focus.frame"
+    private static let fullFrameKey = "win.full.frame"
+}
+
 struct WindowConfigurator: NSViewRepresentable {
     var isFocusMode: Bool
+    let frameStore: WindowFrameStore
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
@@ -23,22 +79,25 @@ struct WindowConfigurator: NSViewRepresentable {
         DispatchQueue.main.async { context.coordinator.apply(focus: focus, window: nsView.window) }
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator { Coordinator(frameStore: frameStore) }
 
     @MainActor
     final class Coordinator {
         private var window: NSWindow?
         private var currentFocus: Bool?
+        private let frameStore: WindowFrameStore
 
+        init(frameStore: WindowFrameStore) {
+            self.frameStore = frameStore
+        }
         func attach(to window: NSWindow?, focus: Bool) {
             guard self.window == nil, let window else { return }
             self.window = window
-            // Remember each mode's frame as the user resizes or moves the window. The
-            // resize/move that `apply` itself triggers just re-saves the value we set
-            // (for the already-current mode), so it's idempotent — no guarding needed.
+            // Track each mode's frame in memory as the user resizes or moves the
+            // window. UserDefaults is written only from the app termination hook.
             for name in [NSWindow.didResizeNotification, NSWindow.didMoveNotification] {
                 NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.saveCurrentFrame() }
+                    MainActor.assumeIsolated { self?.captureCurrentFrame() }
                 }
             }
             apply(focus: focus, window: window)
@@ -47,16 +106,21 @@ struct WindowConfigurator: NSViewRepresentable {
         func apply(focus: Bool, window: NSWindow?) {
             guard let window = self.window ?? window else { return }
             self.window = window
-            guard currentFocus != focus else { return }
+            if let currentFocus, currentFocus != focus {
+                captureCurrentFrame()
+            }
+            guard currentFocus != focus else {
+                captureCurrentFrame()
+                return
+            }
             currentFocus = focus
-
             let (minSize, maxSize) = Self.bounds(focus: focus)
             window.contentMinSize = minSize
             window.contentMaxSize = maxSize
 
             // Restore this mode's saved frame; first time, keep the current position
             // and use the mode's default size.
-            let savedFrame = savedFrame(focus: focus)
+            let savedFrame = frameStore.frame(focus: focus)
             let contentSize = savedFrame.map { window.contentRect(forFrameRect: $0).size }
                 ?? Self.defaultSize(focus: focus)
             let topLeft = savedFrame.map { NSPoint(x: $0.minX, y: $0.maxY) }
@@ -70,17 +134,12 @@ struct WindowConfigurator: NSViewRepresentable {
             frame.origin.x = topLeft.x
             frame.origin.y = topLeft.y - frame.height // anchor the top-left corner
             window.setFrame(Self.onScreen(frame), display: true, animate: false)
+            captureCurrentFrame()
         }
 
-        private func saveCurrentFrame() {
+        private func captureCurrentFrame() {
             guard let window, let focus = currentFocus else { return }
-            UserDefaults.standard.set(NSStringFromRect(window.frame), forKey: Self.frameKey(focus))
-        }
-
-        private func savedFrame(focus: Bool) -> NSRect? {
-            guard let string = UserDefaults.standard.string(forKey: Self.frameKey(focus)) else { return nil }
-            let rect = NSRectFromString(string)
-            return (rect.width > 0 && rect.height > 0) ? rect : nil
+            frameStore.setFrame(window.frame, focus: focus)
         }
 
         /// Keep the frame on a visible screen; if it's entirely off-screen (display
@@ -101,6 +160,5 @@ struct WindowConfigurator: NSViewRepresentable {
         private static func defaultSize(focus: Bool) -> NSSize {
             focus ? NSSize(width: 500, height: 700) : NSSize(width: 1040, height: 680)
         }
-        private static func frameKey(_ focus: Bool) -> String { focus ? "win.focus.frame" : "win.full.frame" }
     }
 }

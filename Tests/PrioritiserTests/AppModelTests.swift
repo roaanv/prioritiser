@@ -4,6 +4,7 @@
 
 import Testing
 import Foundation
+import AppKit
 @testable import Prioritiser
 
 private func tempDBURL() -> URL {
@@ -364,16 +365,48 @@ struct AppModelTests {
         #expect(model.focusTasks.contains { $0.id == created.id })
     }
 
-    @Test func focusModeDefaultsOffAndPersists() throws {
+    @Test func focusModePersistsOnlyWhenUIStateIsSaved() throws {
         let defaults = throwawayDefaults()
         let store = try TaskStore(url: tempDBURL(), clock: TaskClock(now: referenceDate))
         let model = AppModel(store: store, clock: TaskClock(now: referenceDate), defaults: defaults)
         #expect(model.isFocusMode == false) // first run → full mode
+
         model.isFocusMode = true
-        let reopened = AppModel(store: store, clock: TaskClock(now: referenceDate), defaults: defaults)
-        #expect(reopened.isFocusMode == true) // remembered across restarts
+        let unsavedReopen = AppModel(store: store, clock: TaskClock(now: referenceDate), defaults: defaults)
+        #expect(unsavedReopen.isFocusMode == false)
+
+        model.saveUIState()
+        let savedReopen = AppModel(store: store, clock: TaskClock(now: referenceDate), defaults: defaults)
+        #expect(savedReopen.isFocusMode == true)
     }
 
+
+    @Test func windowFramesPersistOnlyWhenExplicitlySaved() {
+        let defaults = throwawayDefaults()
+        let frame = NSRect(x: 20, y: 30, width: 900, height: 600)
+        let store = WindowFrameStore.load(from: defaults)
+
+        store.setFrame(frame, focus: false)
+
+        #expect(WindowFrameStore.load(from: defaults).frame(focus: false) == nil)
+        store.save(to: defaults)
+        #expect(WindowFrameStore.load(from: defaults).frame(focus: false) == frame)
+    }
+
+    @Test func windowFramesSaveFocusAndFullIndependently() {
+        let defaults = throwawayDefaults()
+        let focusFrame = NSRect(x: 10, y: 20, width: 500, height: 700)
+        let fullFrame = NSRect(x: 30, y: 40, width: 1100, height: 800)
+        let store = WindowFrameStore()
+
+        store.setFrame(focusFrame, focus: true)
+        store.setFrame(fullFrame, focus: false)
+        store.save(to: defaults)
+
+        let loaded = WindowFrameStore.load(from: defaults)
+        #expect(loaded.frame(focus: true) == focusFrame)
+        #expect(loaded.frame(focus: false) == fullFrame)
+    }
     // MARK: - Completed view
 
     @Test func completingSetsCompletedAtAndReopeningClearsIt() throws {

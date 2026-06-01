@@ -13,6 +13,11 @@ struct FolderNode: Identifiable {
 }
 
 enum FolderTree {
+    struct FlattenedFolder: Equatable {
+        let folder: Folder
+        let depth: Int
+    }
+
     /// Build the root-level nodes of the folder tree, preserving input order.
     static func build(_ folders: [Folder]) -> [FolderNode] {
         func childrenOf(_ parentId: String?) -> [FolderNode] {
@@ -21,6 +26,33 @@ enum FolderTree {
                 .map { FolderNode(folder: $0, children: childrenOf($0.id)) }
         }
         return childrenOf(nil)
+    }
+
+    /// Flatten the visible part of the tree for sidebar rendering. Descendants are
+    /// included only when every ancestor on their path is expanded.
+    static func flatten(_ folders: [Folder], expanded: Set<String>) -> [FlattenedFolder] {
+        var roots: [Folder] = []
+        var childrenByParent: [String: [Folder]] = [:]
+
+        for folder in folders {
+            if let parentId = folder.parentId {
+                childrenByParent[parentId, default: []].append(folder)
+            } else {
+                roots.append(folder)
+            }
+        }
+
+        var result: [FlattenedFolder] = []
+        func append(_ nodes: [Folder], depth: Int) {
+            for folder in nodes {
+                result.append(FlattenedFolder(folder: folder, depth: depth))
+                if expanded.contains(folder.id), let children = childrenByParent[folder.id] {
+                    append(children, depth: depth + 1)
+                }
+            }
+        }
+        append(roots, depth: 0)
+        return result
     }
 
     /// Ancestor-to-self path, e.g. [Work, Prioritiser]. Empty if not found.

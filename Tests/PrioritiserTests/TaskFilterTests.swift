@@ -43,6 +43,23 @@ struct TaskFilterTests {
         #expect(inWork.contains { $0.folderId == "work" })
     }
 
+    @Test("Folder tree flattening follows disclosure expansion")
+    func folderTreeFlattening() {
+        #expect(FolderTree.flatten(folders, expanded: []).map(\.folder.id) == [
+            "inbox", "work", "personal", "reading"
+        ])
+
+        let expandedWork = FolderTree.flatten(folders, expanded: ["work"])
+        #expect(expandedWork.map(\.folder.id) == [
+            "inbox", "work", "prioritiser", "design", "ops", "personal", "reading"
+        ])
+        #expect(expandedWork.first { $0.folder.id == "prioritiser" }?.depth == 1)
+
+        #expect(FolderTree.flatten(folders, expanded: ["personal"]).map(\.folder.id) == [
+            "inbox", "work", "personal", "home", "reading"
+        ])
+    }
+
     @Test("Overdue view only contains past-due tasks")
     func overdue() {
         let overdue = TaskFilter.tasks(for: .overdue, in: tasks, clock: clock)

@@ -127,6 +127,10 @@ struct DockLayout: Codable, Equatable {
     var hiddenTabs: Set<DockTab>
     var collapsedAreas: Set<DockArea>
     var groupHeightRatios: DockGroupHeightRatios
+    var bottomDockHeightRatio: Double?
+    var leftDockWidthRatio: Double?
+    var rightDockWidthRatio: Double?
+
     static let storageKey = "ui.dockLayout"
 
     static let `default` = DockLayout(
@@ -147,13 +151,19 @@ struct DockLayout: Codable, Equatable {
          bottom: [DockGroup],
          hiddenTabs: Set<DockTab> = [],
          collapsedAreas: Set<DockArea> = [],
-         groupHeightRatios: DockGroupHeightRatios = DockGroupHeightRatios()) {
+         groupHeightRatios: DockGroupHeightRatios = DockGroupHeightRatios(),
+         bottomDockHeightRatio: Double? = nil,
+         leftDockWidthRatio: Double? = nil,
+         rightDockWidthRatio: Double? = nil) {
         self.left = left
         self.right = right
         self.bottom = bottom
         self.hiddenTabs = hiddenTabs
         self.collapsedAreas = collapsedAreas
         self.groupHeightRatios = groupHeightRatios
+        self.bottomDockHeightRatio = Self.validRatio(bottomDockHeightRatio)
+        self.leftDockWidthRatio = Self.validRatio(leftDockWidthRatio)
+        self.rightDockWidthRatio = Self.validRatio(rightDockWidthRatio)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -163,6 +173,9 @@ struct DockLayout: Codable, Equatable {
         case hiddenTabs
         case collapsedAreas
         case groupHeightRatios
+        case bottomDockHeightRatio
+        case leftDockWidthRatio
+        case rightDockWidthRatio
     }
 
     init(from decoder: Decoder) throws {
@@ -173,6 +186,9 @@ struct DockLayout: Codable, Equatable {
         hiddenTabs = try container.decodeIfPresent(Set<DockTab>.self, forKey: .hiddenTabs) ?? []
         collapsedAreas = try container.decodeIfPresent(Set<DockArea>.self, forKey: .collapsedAreas) ?? []
         groupHeightRatios = try container.decodeIfPresent(DockGroupHeightRatios.self, forKey: .groupHeightRatios) ?? DockGroupHeightRatios()
+        bottomDockHeightRatio = Self.validRatio(try container.decodeIfPresent(Double.self, forKey: .bottomDockHeightRatio))
+        leftDockWidthRatio = Self.validRatio(try container.decodeIfPresent(Double.self, forKey: .leftDockWidthRatio))
+        rightDockWidthRatio = Self.validRatio(try container.decodeIfPresent(Double.self, forKey: .rightDockWidthRatio))
     }
 
     subscript(area: DockArea) -> [DockGroup] {
@@ -301,6 +317,37 @@ struct DockLayout: Codable, Equatable {
         repairHeightRatios(in: area)
     }
 
+    func dockWidthRatio(for area: DockArea) -> Double? {
+        switch area {
+        case .left:
+            leftDockWidthRatio
+        case .right:
+            rightDockWidthRatio
+        case .bottom:
+            nil
+        }
+    }
+
+    mutating func setDockWidthRatio(_ ratio: Double, for area: DockArea) {
+        switch area {
+        case .left:
+            leftDockWidthRatio = Self.validRatio(ratio)
+        case .right:
+            rightDockWidthRatio = Self.validRatio(ratio)
+        case .bottom:
+            return
+        }
+    }
+
+    mutating func setBottomDockHeightRatio(_ ratio: Double) {
+        bottomDockHeightRatio = Self.validRatio(ratio)
+    }
+
+    private static func validRatio(_ ratio: Double?) -> Double? {
+        guard let ratio, ratio.isFinite, ratio > 0, ratio < 1 else { return nil }
+        return ratio
+    }
+
     private func contains(_ tab: DockTab) -> Bool {
         DockArea.allCases.contains { area in
             self[area].contains { $0.tabs.contains(tab) }
@@ -362,6 +409,10 @@ struct DockLayout: Codable, Equatable {
     private mutating func repair() {
         hiddenTabs.formIntersection(DockTab.allCases)
         collapsedAreas.formIntersection(DockArea.allCases)
+        bottomDockHeightRatio = Self.validRatio(bottomDockHeightRatio)
+        leftDockWidthRatio = Self.validRatio(leftDockWidthRatio)
+        rightDockWidthRatio = Self.validRatio(rightDockWidthRatio)
+
 
         var seen = Set<DockTab>()
         for area in DockArea.allCases {

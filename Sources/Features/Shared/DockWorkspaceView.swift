@@ -14,6 +14,9 @@ struct DockWorkspaceView: View {
                 DockAreaView(area: .left, layout: $layout)
                     .frame(minWidth: 190, idealWidth: 230, maxWidth: 360)
             }
+            .background(SideDockSplitViewAccessor(area: .left,
+                                                  isExpanded: layout.isExpanded(.left),
+                                                  layout: $layout))
 
             VSplitView {
                 TaskListView()
@@ -22,12 +25,17 @@ struct DockWorkspaceView: View {
                     DockAreaView(area: .bottom, layout: $layout)
                         .frame(minHeight: 180, idealHeight: 240, maxHeight: 420)
                 }
+                .background(BottomDockSplitViewAccessor(isExpanded: layout.isExpanded(.bottom),
+                                                        layout: $layout))
             }
 
             DockAreaSlot(area: .right, layout: $layout) {
                 DockAreaView(area: .right, layout: $layout)
                     .frame(minWidth: 280, idealWidth: 340, maxWidth: 520)
             }
+            .background(SideDockSplitViewAccessor(area: .right,
+                                                  isExpanded: layout.isExpanded(.right),
+                                                  layout: $layout))
         }
     }
 }
@@ -150,6 +158,396 @@ private final class DockSplitNotificationObserver {
     deinit {
         if let token {
             NotificationCenter.default.removeObserver(token)
+        }
+    }
+}
+
+
+private struct BottomDockSplitViewAccessor: NSViewRepresentable {
+    let isExpanded: Bool
+    @Binding var layout: DockLayout
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(isExpanded: isExpanded, layout: $layout)
+    }
+
+    func makeNSView(context: Context) -> FinderView {
+        let view = FinderView()
+        view.onResolve = { [weak coordinator = context.coordinator] splitView, targetSubview in
+            coordinator?.configure(splitView, targetSubview: targetSubview)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: FinderView, context: Context) {
+        context.coordinator.update(isExpanded: isExpanded, layout: $layout)
+        nsView.onResolve = { [weak coordinator = context.coordinator] splitView, targetSubview in
+            coordinator?.configure(splitView, targetSubview: targetSubview)
+        }
+        DispatchQueue.main.async {
+            nsView.resolveSplitView()
+        }
+    }
+
+    final class FinderView: NSView {
+        var onResolve: ((NSSplitView, NSView) -> Void)?
+        private weak var resolvedSplitView: NSSplitView?
+        private weak var resolvedTargetSubview: NSView?
+
+        override func viewDidMoveToSuperview() {
+            super.viewDidMoveToSuperview()
+            DispatchQueue.main.async { [weak self] in
+                self?.resolveSplitView()
+            }
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            DispatchQueue.main.async { [weak self] in
+                self?.resolveSplitView()
+            }
+        }
+
+        func resolveSplitView() {
+            if let resolvedSplitView, let resolvedTargetSubview {
+                onResolve?(resolvedSplitView, resolvedTargetSubview)
+                return
+            }
+
+            var view = superview
+            while let current = view {
+                if let splitView = current as? NSSplitView,
+                   let targetSubview = splitView.arrangedSubviews.first(where: { isDescendant(of: $0) }) {
+                    resolvedSplitView = splitView
+                    resolvedTargetSubview = targetSubview
+                    onResolve?(splitView, targetSubview)
+                    return
+                }
+                view = current.superview
+            }
+        }
+    }
+
+    @MainActor
+    final class Coordinator {
+        private var isExpanded: Bool
+        private var layout: Binding<DockLayout>
+        private weak var splitView: NSSplitView?
+        private weak var targetSubview: NSView?
+        private let resizeObserver = DockSplitNotificationObserver()
+        private var isApplyingSavedLayout = false
+        private var didApplyForCurrentExpansion = false
+
+        init(isExpanded: Bool, layout: Binding<DockLayout>) {
+            self.isExpanded = isExpanded
+            self.layout = layout
+        }
+
+        func update(isExpanded: Bool, layout: Binding<DockLayout>) {
+            if self.isExpanded != isExpanded {
+                didApplyForCurrentExpansion = false
+            }
+            self.isExpanded = isExpanded
+            self.layout = layout
+            if let splitView, let targetSubview {
+                configure(splitView, targetSubview: targetSubview)
+            }
+        }
+
+        func configure(_ splitView: NSSplitView, targetSubview: NSView) {
+            if self.splitView !== splitView {
+                detachObserver()
+                self.splitView = splitView
+                didApplyForCurrentExpansion = false
+            }
+            self.targetSubview = targetSubview
+
+            guard isExpanded else {
+                detachObserver()
+                return
+            }
+
+            if !didApplyForCurrentExpansion {
+                isApplyingSavedLayout = true
+                DispatchQueue.main.async { [weak self, weak splitView, weak targetSubview] in
+                    guard let self, let splitView, let targetSubview else { return }
+                    self.applySavedLayoutWhenReady(to: splitView, targetSubview: targetSubview, attempt: 0)
+                }
+            } else {
+                attachObserver(to: splitView)
+            }
+        }
+
+        private func attachObserver(to splitView: NSSplitView) {
+            guard resizeObserver.token == nil else { return }
+            resizeObserver.token = NotificationCenter.default.addObserver(
+                forName: NSSplitView.didResizeSubviewsNotification,
+                object: splitView,
+                queue: .main
+            ) { [weak self, weak splitView] _ in
+                MainActor.assumeIsolated {
+                    guard let self,
+                          let splitView,
+                          let targetSubview = self.targetSubview,
+                          self.isExpanded,
+                          !self.isApplyingSavedLayout else { return }
+                    self.captureRatio(from: splitView, targetSubview: targetSubview)
+                }
+            }
+        }
+
+        private func detachObserver() {
+            if let token = resizeObserver.token {
+                NotificationCenter.default.removeObserver(token)
+                resizeObserver.token = nil
+            }
+        }
+
+        private func applySavedLayoutWhenReady(to splitView: NSSplitView, targetSubview: NSView, attempt: Int) {
+            if applySavedLayout(to: splitView, targetSubview: targetSubview) {
+                didApplyForCurrentExpansion = true
+                attachObserver(to: splitView)
+                DispatchQueue.main.async { [weak self] in
+                    self?.isApplyingSavedLayout = false
+                }
+            } else if attempt >= 8 {
+                didApplyForCurrentExpansion = false
+                isApplyingSavedLayout = false
+            } else {
+                DispatchQueue.main.async { [weak self, weak splitView, weak targetSubview] in
+                    guard let self, let splitView, let targetSubview else { return }
+                    self.applySavedLayoutWhenReady(to: splitView, targetSubview: targetSubview, attempt: attempt + 1)
+                }
+            }
+        }
+
+        private func applySavedLayout(to splitView: NSSplitView, targetSubview: NSView) -> Bool {
+            guard let ratio = layout.wrappedValue.bottomDockHeightRatio else { return true }
+            guard !splitView.isVertical,
+                  splitView.arrangedSubviews.count == 2,
+                  splitView.bounds.height > 0,
+                  targetSubview.frame.height > 0 else { return false }
+
+            let dividerThickness = splitView.dividerThickness
+            let contentHeight = max(0, splitView.bounds.height - dividerThickness)
+            guard contentHeight > 0 else { return false }
+
+            let targetHeight = min(max(contentHeight * CGFloat(ratio), 32), contentHeight - 32)
+            let targetIsLowerPane = targetSubview.frame.midY <= splitView.bounds.midY
+            let position = targetIsLowerPane ? targetHeight : splitView.bounds.height - targetHeight - dividerThickness
+            splitView.setPosition(position, ofDividerAt: 0)
+            return true
+        }
+
+        private func captureRatio(from splitView: NSSplitView, targetSubview: NSView) {
+            guard !splitView.isVertical,
+                  splitView.arrangedSubviews.count == 2,
+                  splitView.bounds.height > 0 else { return }
+
+            let contentHeight = max(0, splitView.bounds.height - splitView.dividerThickness)
+            guard contentHeight > 0 else { return }
+
+            let ratio = Double(targetSubview.frame.height / contentHeight)
+            layout.wrappedValue.setBottomDockHeightRatio(ratio)
+        }
+    }
+}
+
+private struct SideDockSplitViewAccessor: NSViewRepresentable {
+    let area: DockArea
+    let isExpanded: Bool
+    @Binding var layout: DockLayout
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(area: area, isExpanded: isExpanded, layout: $layout)
+    }
+
+    func makeNSView(context: Context) -> FinderView {
+        let view = FinderView()
+        view.onResolve = { [weak coordinator = context.coordinator] splitView, targetSubview in
+            coordinator?.configure(splitView, targetSubview: targetSubview)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: FinderView, context: Context) {
+        context.coordinator.update(area: area, isExpanded: isExpanded, layout: $layout)
+        nsView.onResolve = { [weak coordinator = context.coordinator] splitView, targetSubview in
+            coordinator?.configure(splitView, targetSubview: targetSubview)
+        }
+        DispatchQueue.main.async {
+            nsView.resolveSplitView()
+        }
+    }
+
+    final class FinderView: NSView {
+        var onResolve: ((NSSplitView, NSView) -> Void)?
+        private weak var resolvedSplitView: NSSplitView?
+        private weak var resolvedTargetSubview: NSView?
+
+        override func viewDidMoveToSuperview() {
+            super.viewDidMoveToSuperview()
+            DispatchQueue.main.async { [weak self] in
+                self?.resolveSplitView()
+            }
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            DispatchQueue.main.async { [weak self] in
+                self?.resolveSplitView()
+            }
+        }
+
+        func resolveSplitView() {
+            if let resolvedSplitView, let resolvedTargetSubview {
+                onResolve?(resolvedSplitView, resolvedTargetSubview)
+                return
+            }
+
+            var view = superview
+            while let current = view {
+                if let splitView = current as? NSSplitView,
+                   let targetSubview = splitView.arrangedSubviews.first(where: { isDescendant(of: $0) }) {
+                    resolvedSplitView = splitView
+                    resolvedTargetSubview = targetSubview
+                    onResolve?(splitView, targetSubview)
+                    return
+                }
+                view = current.superview
+            }
+        }
+    }
+
+    @MainActor
+    final class Coordinator {
+        private var area: DockArea
+        private var isExpanded: Bool
+        private var layout: Binding<DockLayout>
+        private weak var splitView: NSSplitView?
+        private weak var targetSubview: NSView?
+        private let resizeObserver = DockSplitNotificationObserver()
+        private var isApplyingSavedLayout = false
+        private var didApplyForCurrentExpansion = false
+
+        init(area: DockArea, isExpanded: Bool, layout: Binding<DockLayout>) {
+            self.area = area
+            self.isExpanded = isExpanded
+            self.layout = layout
+        }
+
+        func update(area: DockArea, isExpanded: Bool, layout: Binding<DockLayout>) {
+            if self.area != area || self.isExpanded != isExpanded {
+                didApplyForCurrentExpansion = false
+            }
+            self.area = area
+            self.isExpanded = isExpanded
+            self.layout = layout
+            if let splitView, let targetSubview {
+                configure(splitView, targetSubview: targetSubview)
+            }
+        }
+
+        func configure(_ splitView: NSSplitView, targetSubview: NSView) {
+            if self.splitView !== splitView {
+                detachObserver()
+                self.splitView = splitView
+                didApplyForCurrentExpansion = false
+            }
+            self.targetSubview = targetSubview
+
+            guard isExpanded else {
+                detachObserver()
+                return
+            }
+
+            if !didApplyForCurrentExpansion {
+                isApplyingSavedLayout = true
+                DispatchQueue.main.async { [weak self, weak splitView, weak targetSubview] in
+                    guard let self, let splitView, let targetSubview else { return }
+                    self.applySavedLayoutWhenReady(to: splitView, targetSubview: targetSubview, attempt: 0)
+                }
+            } else {
+                attachObserver(to: splitView)
+            }
+        }
+
+        private func attachObserver(to splitView: NSSplitView) {
+            guard resizeObserver.token == nil else { return }
+            resizeObserver.token = NotificationCenter.default.addObserver(
+                forName: NSSplitView.didResizeSubviewsNotification,
+                object: splitView,
+                queue: .main
+            ) { [weak self, weak splitView] _ in
+                MainActor.assumeIsolated {
+                    guard let self,
+                          let splitView,
+                          let targetSubview = self.targetSubview,
+                          self.isExpanded,
+                          !self.isApplyingSavedLayout else { return }
+                    self.captureRatio(from: splitView, targetSubview: targetSubview)
+                }
+            }
+        }
+
+        private func detachObserver() {
+            if let token = resizeObserver.token {
+                NotificationCenter.default.removeObserver(token)
+                resizeObserver.token = nil
+            }
+        }
+
+        private func applySavedLayoutWhenReady(to splitView: NSSplitView, targetSubview: NSView, attempt: Int) {
+            if applySavedLayout(to: splitView, targetSubview: targetSubview) {
+                didApplyForCurrentExpansion = true
+                attachObserver(to: splitView)
+                DispatchQueue.main.async { [weak self] in
+                    self?.isApplyingSavedLayout = false
+                }
+            } else if attempt >= 8 {
+                didApplyForCurrentExpansion = false
+                isApplyingSavedLayout = false
+            } else {
+                DispatchQueue.main.async { [weak self, weak splitView, weak targetSubview] in
+                    guard let self, let splitView, let targetSubview else { return }
+                    self.applySavedLayoutWhenReady(to: splitView, targetSubview: targetSubview, attempt: attempt + 1)
+                }
+            }
+        }
+
+        private func applySavedLayout(to splitView: NSSplitView, targetSubview: NSView) -> Bool {
+            guard let ratio = layout.wrappedValue.dockWidthRatio(for: area) else { return true }
+            guard splitView.isVertical,
+                  splitView.arrangedSubviews.count == 3,
+                  splitView.bounds.width > 0,
+                  targetSubview.frame.width > 0 else { return false }
+
+            let dividerThickness = splitView.dividerThickness
+            let contentWidth = max(0, splitView.bounds.width - dividerThickness * 2)
+            guard contentWidth > 0 else { return false }
+
+            let targetWidth = min(max(contentWidth * CGFloat(ratio), 32), contentWidth - 32)
+            switch area {
+            case .left:
+                splitView.setPosition(targetWidth, ofDividerAt: 0)
+            case .right:
+                splitView.setPosition(splitView.bounds.width - targetWidth - dividerThickness, ofDividerAt: 1)
+            case .bottom:
+                return true
+            }
+            return true
+        }
+
+        private func captureRatio(from splitView: NSSplitView, targetSubview: NSView) {
+            guard splitView.isVertical,
+                  splitView.arrangedSubviews.count == 3,
+                  splitView.bounds.width > 0 else { return }
+
+            let contentWidth = max(0, splitView.bounds.width - splitView.dividerThickness * 2)
+            guard contentWidth > 0 else { return }
+
+            let ratio = Double(targetSubview.frame.width / contentWidth)
+            layout.wrappedValue.setDockWidthRatio(ratio, for: area)
         }
     }
 }

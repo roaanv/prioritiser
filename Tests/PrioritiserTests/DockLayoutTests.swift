@@ -196,4 +196,43 @@ struct DockLayoutTests {
         #expect(loaded.heightRatio(for: group.id, in: .left) == 1.0)
         #expect(loaded.heightRatio(for: staleID, in: .left) == nil)
     }
+
+    @Test func bottomDockHeightRatioPersistsAcrossEncoding() throws {
+        var layout = DockLayout.default
+        layout.setBottomDockHeightRatio(0.32)
+
+        let decoded = try JSONDecoder().decode(DockLayout.self, from: try JSONEncoder().encode(layout))
+
+        #expect(decoded.bottomDockHeightRatio == 0.32)
+    }
+
+    @Test func invalidBottomDockHeightRatioIsDiscarded() {
+        var layout = DockLayout.default
+
+        layout.setBottomDockHeightRatio(1.2)
+
+        #expect(layout.bottomDockHeightRatio == nil)
+    }
+
+    @Test func sideDockWidthRatiosPersistAcrossEncoding() throws {
+        var layout = DockLayout.default
+        layout.setDockWidthRatio(0.22, for: .left)
+        layout.setDockWidthRatio(0.31, for: .right)
+
+        let decoded = try JSONDecoder().decode(DockLayout.self, from: try JSONEncoder().encode(layout))
+
+        #expect(decoded.dockWidthRatio(for: .left) == 0.22)
+        #expect(decoded.dockWidthRatio(for: .right) == 0.31)
+        #expect(decoded.dockWidthRatio(for: .bottom) == nil)
+    }
+
+    @Test func invalidSideDockWidthRatiosAreDiscarded() {
+        var layout = DockLayout.default
+
+        layout.setDockWidthRatio(-0.1, for: .left)
+        layout.setDockWidthRatio(1.0, for: .right)
+
+        #expect(layout.dockWidthRatio(for: .left) == nil)
+        #expect(layout.dockWidthRatio(for: .right) == nil)
+    }
 }

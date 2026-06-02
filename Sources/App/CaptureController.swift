@@ -104,6 +104,39 @@ struct WindowVisibilityState: Equatable {
     }
 }
 
+@MainActor
+final class AppWindowRegistry {
+    static let shared = AppWindowRegistry()
+
+    private struct Entry {
+        weak var window: NSWindow?
+    }
+
+    private var entries: [Entry] = []
+
+    func remember(_ window: NSWindow) {
+        prune()
+        guard !entries.contains(where: { $0.window === window }) else { return }
+        entries.append(Entry(window: window))
+    }
+
+    func windows(including currentWindows: [NSWindow]) -> [NSWindow] {
+        for window in currentWindows {
+            remember(window)
+        }
+        prune()
+        return entries.compactMap(\.window)
+    }
+
+    func forget(_ window: NSWindow) {
+        entries.removeAll { $0.window == nil || $0.window === window }
+    }
+
+    private func prune() {
+        entries.removeAll { $0.window == nil }
+    }
+}
+
 /// Captures the app's window visibility before the transient quick-capture panel
 /// appears, then restores it after the panel closes. Showing the panel must activate
 /// this process so the text field can become key; restoration keeps that activation
@@ -119,9 +152,17 @@ struct AppVisibilitySnapshot {
     private let states: [WindowState]
 
     static func capture(excluding excludedWindow: NSWindow?) -> AppVisibilitySnapshot {
+        capture(excluding: excludedWindow, windows: NSApp.windows, isAppHidden: NSApp.isHidden)
+    }
+
+    static func capture(
+        excluding excludedWindow: NSWindow?,
+        windows: [NSWindow],
+        isAppHidden: Bool
+    ) -> AppVisibilitySnapshot {
         AppVisibilitySnapshot(
-            wasHidden: NSApp.isHidden,
-            states: NSApp.windows
+            wasHidden: isAppHidden,
+            states: AppWindowRegistry.shared.windows(including: windows)
                 .filter { window in
                     window !== excludedWindow
                 }

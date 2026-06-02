@@ -1,7 +1,7 @@
 # Releasing Prioritiser
 
-Distribution is a signed + notarized, universal (arm64 + x86_64) macOS app,
-published as both a `.dmg` and a `.zip` to this repo's GitHub Releases **and** to
+Distribution is a signed + notarized Apple Silicon (arm64) macOS app, published
+as both a `.dmg` and a `.zip` to this repo's GitHub Releases **and** to
 the shared [`roaanv/releases`](https://github.com/roaanv/releases) repo.
 
 The pipeline is driven by [`.github/workflows/release.yml`](.github/workflows/release.yml),
@@ -82,8 +82,8 @@ changelog notes under the new version heading first.
 The `v*` tag triggers the workflow: it runs the test suite, then builds, signs,
 notarizes, packages, and publishes:
 
-- `Prioritiser-v0.2.0-universal.dmg`
-- `Prioritiser-v0.2.0-universal.zip`
+- `Prioritiser-v0.2.0-arm64.dmg`
+- `Prioritiser-v0.2.0-arm64.zip`
 
 to this repo's Releases and to `roaanv/releases` (tagged `prioritiser-v0.2.0`).
 

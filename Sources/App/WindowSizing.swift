@@ -93,6 +93,7 @@ struct WindowConfigurator: NSViewRepresentable {
         func attach(to window: NSWindow?, focus: Bool) {
             guard self.window == nil, let window else { return }
             self.window = window
+            AppWindowRegistry.shared.remember(window)
             // Track each mode's frame in memory as the user resizes or moves the
             // window. UserDefaults is written only from the app termination hook.
             for name in [NSWindow.didResizeNotification, NSWindow.didMoveNotification] {
@@ -105,6 +106,7 @@ struct WindowConfigurator: NSViewRepresentable {
 
         func apply(focus: Bool, window: NSWindow?) {
             guard let window = self.window ?? window else { return }
+            AppWindowRegistry.shared.remember(window)
             self.window = window
             if let currentFocus, currentFocus != focus {
                 captureCurrentFrame()

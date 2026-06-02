@@ -30,16 +30,21 @@ struct CaptureControllerTests {
             defer: false
         )
         window.title = "Prioritiser hidden visibility test \(UUID().uuidString)"
+        defer {
+            AppWindowRegistry.shared.forget(window)
+            window.close()
+        }
+
+        AppWindowRegistry.shared.remember(window)
         window.orderOut(nil)
         #expect(!window.isVisible)
 
-        let snapshot = AppVisibilitySnapshot.capture(excluding: nil)
+        let snapshot = AppVisibilitySnapshot.capture(excluding: nil, windows: [], isAppHidden: NSApp.isHidden)
         window.orderFrontRegardless()
         #expect(window.isVisible)
 
         snapshot.restore()
         #expect(!window.isVisible)
 
-        window.close()
     }
 }

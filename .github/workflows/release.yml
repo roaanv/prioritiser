@@ -1,8 +1,8 @@
 # Signed, notarized release pipeline for Prioritiser.
 #
-# Triggered by pushing a version tag (v*). Produces a universal (arm64 + x86_64)
-# macOS app, code-signed with Developer ID and notarized via the App Store Connect
-# API key. Distributed as both .dmg (drag-to-install) and .zip, published to this
+# Triggered by pushing a version tag (v*). Produces an Apple Silicon (arm64)
+# macOS app, code-signed with Developer ID and notarized via the App Store
+# Connect API key. Distributed as both .dmg (drag-to-install) and .zip, published to this
 # repo's Releases and to the shared roaanv/releases repo.
 #
 # Required repository secrets (see RELEASE.md / `make gh-secrets`):
@@ -36,6 +36,9 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
 
+      - name: Verify Apple Silicon runner
+        run: test "$(uname -m)" = arm64
+
       - name: Setup project
         run: make setup
 
@@ -53,6 +56,9 @@ jobs:
 
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
+
+      - name: Verify Apple Silicon runner
+        run: test "$(uname -m)" = arm64
 
       - name: Setup project
         run: make setup
@@ -96,7 +102,7 @@ jobs:
           echo "SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
       # ── Build & Sign ─────────────────────────────────
-      - name: Build universal release binary
+      - name: Build Apple Silicon release binary
         run: make release
 
       - name: Sign application
@@ -134,7 +140,7 @@ jobs:
           API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
         run: |
           make notarize-dmg \
-            NOTARIZE_PATH="build/Prioritiser-${{ github.ref_name }}-universal.dmg" \
+            NOTARIZE_PATH="build/Prioritiser-${{ github.ref_name }}-arm64.dmg" \
             API_KEY_PATH="$API_KEY_PATH" \
             API_KEY_ID="$API_KEY_ID" \
             API_ISSUER_ID="$API_ISSUER_ID"
@@ -151,8 +157,8 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            build/Prioritiser-${{ github.ref_name }}-universal.dmg
-            build/Prioritiser-${{ github.ref_name }}-universal.zip
+            build/Prioritiser-${{ github.ref_name }}-arm64.dmg
+            build/Prioritiser-${{ github.ref_name }}-arm64.zip
 
       - name: Publish to public releases repo
         uses: softprops/action-gh-release@v2
@@ -162,8 +168,8 @@ jobs:
           tag_name: prioritiser-${{ github.ref_name }}
           name: prioritiser ${{ github.ref_name }}
           files: |
-            build/Prioritiser-${{ github.ref_name }}-universal.dmg
-            build/Prioritiser-${{ github.ref_name }}-universal.zip
+            build/Prioritiser-${{ github.ref_name }}-arm64.dmg
+            build/Prioritiser-${{ github.ref_name }}-arm64.zip
 
       # ── Cleanup ──────────────────────────────────────
       - name: Clean up signing artifacts

@@ -15,6 +15,8 @@ settings:
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "0.1.9"
     CURRENT_PROJECT_VERSION: "1"
+    # Apple Silicon only. Do not build or package Intel slices.
+    ARCHS: arm64
     # Local development: ad-hoc sign, no provisioning required.
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: "-"

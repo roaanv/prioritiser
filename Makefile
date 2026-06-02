@@ -6,9 +6,10 @@ PRODUCT_NAME := Prioritiser
 PROJECT      := Prioritiser.xcodeproj
 CONFIG       ?= Debug
 DERIVED      := build
-DESTINATION  := platform=macOS
+ARCHS        := arm64
+DESTINATION  := platform=macOS,arch=$(ARCHS)
 APP          := $(DERIVED)/Build/Products/$(CONFIG)/Prioritiser.app
-# Release pipeline output (universal .app, signed + notarized in CI).
+# Release pipeline output (Apple Silicon app, signed + notarized in CI).
 RELEASE_APP  := $(DERIVED)/Build/Products/Release/$(PRODUCT_NAME).app
 ENTITLEMENTS := Prioritiser.entitlements
 
@@ -40,6 +41,7 @@ build: $(PROJECT) ## Build the app
 		-configuration $(CONFIG) \
 		-destination '$(DESTINATION)' \
 		-derivedDataPath $(DERIVED) \
+		ARCHS="$(ARCHS)" \
 		CODE_SIGNING_ALLOWED=NO $(PRETTY)
 
 .PHONY: run
@@ -48,14 +50,15 @@ run: build ## Build then launch the app
 	open "$(APP)"
 
 .PHONY: install
-install: $(PROJECT) ## Build a Release app (this Mac's arch) and copy it to ~/Applications
-	@echo "Building $(PRODUCT_NAME) (Release, this Mac's architecture)..."
+install: $(PROJECT) ## Build an Apple Silicon Release app and copy it to ~/Applications
+	@echo "Building $(PRODUCT_NAME) (Release, Apple Silicon)..."
 	set -o pipefail && xcodebuild build \
 		-project $(PROJECT) \
 		-scheme $(SCHEME) \
 		-configuration Release \
 		-derivedDataPath $(DERIVED) \
-		ONLY_ACTIVE_ARCH=YES $(PRETTY)
+		ARCHS="$(ARCHS)" \
+		CODE_SIGNING_ALLOWED=NO $(PRETTY)
 	@mkdir -p "$$HOME/Applications"
 	@rm -rf "$$HOME/Applications/$(PRODUCT_NAME).app"
 	@cp -R "$(RELEASE_APP)" "$$HOME/Applications/"
@@ -69,6 +72,7 @@ test: $(PROJECT) ## Run the unit test suite
 		-configuration $(CONFIG) \
 		-destination '$(DESTINATION)' \
 		-derivedDataPath $(DERIVED) \
+		ARCHS="$(ARCHS)" \
 		CODE_SIGNING_ALLOWED=NO
 
 .PHONY: deploy
@@ -79,16 +83,17 @@ deploy: $(PROJECT) ## Build a Release archive (signing/notarization done separat
 		-configuration Release \
 		-destination 'generic/platform=macOS' \
 		-archivePath $(DERIVED)/Prioritiser.xcarchive \
+		ARCHS="$(ARCHS)" \
 		CODE_SIGNING_ALLOWED=NO
 	@echo "Archive at $(DERIVED)/Prioritiser.xcarchive"
 	@echo "For signed/notarized distribution use the release pipeline below (see RELEASE.md)."
 
 # ── Release pipeline ─────────────────────────────────
-# Produces a signed, notarized, universal (arm64 + x86_64) .app for
-# distribution outside the Mac App Store. CI drives these in order
-# (.github/workflows/release.yml); see RELEASE.md for the secret setup.
+# Produces a signed, notarized, Apple Silicon .app for distribution outside the
+# Mac App Store. CI drives these in order (.github/workflows/release.yml); see
+# RELEASE.md for the secret setup.
 #
-#   make release                                              # unsigned universal build
+#   make release                                              # unsigned arm64 build
 #   make sign        SIGNING_IDENTITY="Developer ID Application: …"
 #   make notarize-app                  API_KEY_PATH=… API_KEY_ID=… API_ISSUER_ID=…
 #   make dmg         TAG=v1.0.0                               # package stapled .app as .dmg
@@ -96,14 +101,14 @@ deploy: $(PROJECT) ## Build a Release archive (signing/notarization done separat
 #   make archive     TAG=v1.0.0                               # package stapled .app as .zip
 
 .PHONY: release
-release: $(PROJECT) ## Build an unsigned universal (arm64+x86_64) Release .app
-	@echo "Building $(PRODUCT_NAME) (Release, universal binary)..."
+release: $(PROJECT) ## Build an unsigned Apple Silicon Release .app
+	@echo "Building $(PRODUCT_NAME) (Release, Apple Silicon)..."
 	set -o pipefail && xcodebuild build \
 		-project $(PROJECT) \
 		-scheme $(SCHEME) \
 		-configuration Release \
 		-derivedDataPath $(DERIVED) \
-		ARCHS="arm64 x86_64" \
+		ARCHS="$(ARCHS)" \
 		ONLY_ACTIVE_ARCH=NO \
 		CODE_SIGNING_ALLOWED=NO $(PRETTY)
 	@echo "Built $(RELEASE_APP)"
@@ -154,9 +159,9 @@ dmg: ## Package the (stapled) .app as a .dmg (requires TAG)
 		-volname "$(PRODUCT_NAME)" \
 		-srcfolder "$(DERIVED)/dmg-staging" \
 		-ov -format UDZO \
-		"$(DERIVED)/$(PRODUCT_NAME)-$(TAG)-universal.dmg"
+		"$(DERIVED)/$(PRODUCT_NAME)-$(TAG)-arm64.dmg"
 	@rm -rf "$(DERIVED)/dmg-staging"
-	@echo "Created $(DERIVED)/$(PRODUCT_NAME)-$(TAG)-universal.dmg"
+	@echo "Created $(DERIVED)/$(PRODUCT_NAME)-$(TAG)-arm64.dmg"
 
 # Notarize a DMG that already contains a stapled .app — the DMG gets its own
 # ticket (tied to its outer hash). Run after `make notarize-app && make dmg`.
@@ -181,11 +186,11 @@ notarize-dmg: ## Notarize + staple a DMG (requires NOTARIZE_PATH + API_KEY_PATH/
 .PHONY: archive
 archive: ## Package the (stapled) .app as a .zip (requires TAG)
 	@if [ -z "$(TAG)" ]; then echo "Error: TAG is required (e.g. make archive TAG=v1.0.0)"; exit 1; fi
-	@echo "Archiving $(PRODUCT_NAME)-$(TAG)-universal.zip..."
+	@echo "Archiving $(PRODUCT_NAME)-$(TAG)-arm64.zip..."
 	ditto -c -k --sequesterRsrc --keepParent \
 		"$(RELEASE_APP)" \
-		"$(DERIVED)/$(PRODUCT_NAME)-$(TAG)-universal.zip"
-	@echo "Created $(DERIVED)/$(PRODUCT_NAME)-$(TAG)-universal.zip"
+		"$(DERIVED)/$(PRODUCT_NAME)-$(TAG)-arm64.zip"
+	@echo "Created $(DERIVED)/$(PRODUCT_NAME)-$(TAG)-arm64.zip"
 
 .PHONY: gh-secrets
 gh-secrets: ## Push release secrets from the macOS Keychain to the GitHub repo

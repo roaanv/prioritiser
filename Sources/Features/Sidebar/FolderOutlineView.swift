@@ -88,10 +88,12 @@ private final class FolderCellView: NSTableCellView {
 
         nameField.lineBreakMode = .byTruncatingTail
         nameField.isEditable = true
-        nameField.isSelectable = false
+        nameField.isSelectable = true
         nameField.isBordered = false
         nameField.drawsBackground = false
         nameField.focusRingType = .none
+        nameField.usesSingleLineMode = true
+        nameField.cell?.isScrollable = true
         nameField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         badgeField.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
@@ -145,6 +147,9 @@ final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
     private var nodesByID: [String: OutlineFolderNode] = [:]
     private var contextFolderID: String?
     private var isApplyingModel = false
+    /// Last folder-edit request we acted on, so a single request begins editing
+    /// once even though `reload` runs on every model change.
+    private var lastFolderEditToken = 0
 
     init(model: AppModel) {
         self.model = model
@@ -173,6 +178,15 @@ final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
             }
         } else {
             outlineView.deselectAll(nil)
+        }
+
+        // A new folder (or "Rename") asked for inline editing. The tree has just
+        // been rebuilt and any parent expanded, so the target row now exists.
+        if model.folderEditToken != lastFolderEditToken {
+            lastFolderEditToken = model.folderEditToken
+            if let id = model.pendingFolderEdit {
+                beginEditing(folderID: id, in: outlineView)
+            }
         }
         isApplyingModel = false
     }
@@ -263,19 +277,34 @@ final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         model.renameFolder(id: folderID, to: field.stringValue)
     }
 
-    @objc private func renameContextFolder() {
-        guard let outlineView,
-              let folderID = contextFolderID,
-              let node = nodesByID[folderID] else { return }
-        let row = outlineView.row(forItem: node)
-        guard row >= 0 else { return }
-        outlineView.editColumn(0, row: row, with: nil, select: true)
-    }
-
     @objc private func addSubfolderToContextFolder() {
         guard let folderID = contextFolderID else { return }
         let id = model.addFolder(name: "New Folder", parentId: folderID)
         model.selection = .folder(id)
+        model.requestFolderEdit(id: id)
+    }
+
+    /// Begin inline-editing a newly created folder's name. Deferred one run-loop
+    /// turn so it runs after the SwiftUI reload that adding the folder schedules,
+    /// by which point the row exists and is stable.
+    ///
+    /// This mirrors the one gesture that reliably edits — selecting a row and
+    /// pressing Return: the *outline view* must be first responder, then editing
+    /// starts through `editColumn`, the same entry point Return uses internally.
+    /// (Focusing the cell's text field directly bypasses the table's field-editor
+    /// setup and silently fails to engage.) The row is left selected and the
+    /// outline view focused, so even if editing doesn't auto-start, pressing
+    /// Return immediately renames.
+    private func beginEditing(folderID: String, in outlineView: NSOutlineView) {
+        Task { @MainActor in
+            guard let node = nodesByID[folderID] else { return }
+            let row = outlineView.row(forItem: node)
+            guard row >= 0 else { return }
+            outlineView.scrollRowToVisible(row)
+            outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            outlineView.window?.makeFirstResponder(outlineView)
+            outlineView.editColumn(0, row: row, with: nil, select: true)
+        }
     }
 
     @objc private func moveContextFolderToRoot() {
@@ -305,7 +334,6 @@ final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegat
         outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         model.selection = .folder(node.folder.id)
 
-        menu.addItem(NSMenuItem(title: "Rename", action: #selector(renameContextFolder), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "New Subfolder", action: #selector(addSubfolderToContextFolder), keyEquivalent: ""))
 
         if !node.folder.isSystem && node.folder.parentId != nil {

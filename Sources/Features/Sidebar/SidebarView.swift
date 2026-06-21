@@ -50,6 +50,7 @@ struct SidebarView: View {
             Button {
                 let id = model.addFolder(name: "New Folder", parentId: nil)
                 model.selection = .folder(id)
+                model.requestFolderEdit(id: id)
             } label: {
                 Image(systemName: "plus").font(.system(size: 10, weight: .semibold))
             }

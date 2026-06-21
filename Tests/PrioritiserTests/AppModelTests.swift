@@ -153,6 +153,22 @@ struct AppModelTests {
         #expect(model.folders.first { $0.id == "inbox" }?.parentId == nil)
     }
 
+    @Test func requestFolderEditPublishesIDAndAdvancesToken() throws {
+        let model = try makeModel()
+        #expect(model.pendingFolderEdit == nil)
+        let start = model.folderEditToken
+
+        let id = model.addFolder(name: "New Folder", parentId: nil)
+        model.requestFolderEdit(id: id)
+        #expect(model.pendingFolderEdit == id)
+        #expect(model.folderEditToken == start + 1)
+
+        // Each request advances the token so the outline view edits once per call,
+        // even when the same folder is targeted again.
+        model.requestFolderEdit(id: id)
+        #expect(model.folderEditToken == start + 2)
+    }
+
     @Test func moveFolderBeforeReordersWithinParent() throws {
         let model = try makeModel()
         model.moveFolder("personal", before: "inbox") // both roots → reorder

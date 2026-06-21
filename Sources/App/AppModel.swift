@@ -32,6 +32,12 @@ final class AppModel {
     var searchQuery = ""
     /// Bumped when ⌘F is pressed; the sidebar search field focuses on change.
     var focusSearchToken = 0
+    /// The folder the sidebar's tree should drop into inline-rename mode. The
+    /// paired token lets the AppKit outline view begin editing exactly once per
+    /// request (after creating a folder, or on "Rename") even if the same id is
+    /// requested again. `nil` id means no pending request.
+    private(set) var pendingFolderEdit: String?
+    private(set) var folderEditToken = 0
     /// Shared folder scope: include descendant projects in the list AND the matrix.
     var includeSubprojects: Bool
     /// When set (via the matrix), the folder list is narrowed to this quadrant.
@@ -476,6 +482,15 @@ final class AppModel {
         folders.append(folder)
         if let parentId { expandedFolders.insert(parentId) }
         return folder.id
+    }
+
+    /// Ask the sidebar's folder tree to begin inline-editing this folder's name.
+    /// Used right after creating a folder (so its name is immediately editable)
+    /// and by the "Rename" command. The outline view consumes this on its next
+    /// reload (see `FolderOutlineView`).
+    func requestFolderEdit(id: String) {
+        pendingFolderEdit = id
+        folderEditToken += 1
     }
 
     func renameFolder(id: String, to name: String) {
